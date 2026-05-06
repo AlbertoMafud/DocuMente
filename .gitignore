@@ -1,0 +1,85 @@
+# Entornos virtuales
+.venv/
+venv/
+env/
+ENV/
+
+# Variables de entorno
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+develop-eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+MANIFEST
+
+# Tests / coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+.hypothesis/
+
+# Type checkers / linters
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.pytype/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Datos locales (no se commitean)
+data/
+!data/.gitkeep
+
+# Logs
+*.log
+logs/
+
+# Archivos generados
+*.docx.bak
+~$*.docx
+~$*.xlsx
+.tmp/
+
+# Material fuente SMNYL — IP de la empresa, NO se commitea bajo ninguna circunstancia.
+# Estos archivos son referencia local únicamente.
+SMNYL/
+
+# Logo SMNYL — marca registrada. Solo se incluye en builds locales,
+# no en el repo. Si necesitas el logo, copia local desde SMNYL/Imagenes/.
+assets/logo-smnyl.jpg
+
+# Carpeta de plan local de Claude (vive fuera del repo, pero por seguridad)
+.claude/

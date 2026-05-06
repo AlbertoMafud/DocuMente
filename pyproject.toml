@@ -1,0 +1,88 @@
+[project]
+name = "documente"
+version = "0.1.0"
+description = "Sistema agéntico local de documentación institucional para SMNYL"
+authors = [{ name = "Alberto Solano" }]
+requires-python = ">=3.11,<3.13"
+readme = "README.md"
+
+dependencies = [
+    # UI
+    "streamlit>=1.36.0",
+    "streamlit-extras>=0.4.7",
+
+    # LLM
+    "anthropic>=0.40.0",
+
+    # Documentos
+    "python-docx>=1.1.2",
+    "docxtpl>=0.18.0",
+    "Jinja2>=3.1.4",
+
+    # Datos y validación
+    "pydantic>=2.7.0",
+    "pydantic-settings>=2.3.0",
+
+    # Persistencia
+    "sqlalchemy>=2.0.30",
+
+    # Utilidades
+    "python-dotenv>=1.0.1",
+    "structlog>=24.2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.2.0",
+    "pytest-cov>=5.0.0",
+    "ruff>=0.5.0",
+    "mypy>=1.10.0",
+    "types-python-dateutil",
+]
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "UP",   # pyupgrade
+    "SIM",  # flake8-simplify
+    "RUF",  # ruff-specific
+]
+ignore = [
+    "E501",   # line too long (lo maneja ruff format)
+    "RUF001", # ambiguous unicode chars en strings (uso intencional: ×, ℹ, etc.)
+    "RUF002", # ambiguous unicode chars en docstrings (uso intencional)
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
