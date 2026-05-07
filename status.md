@@ -2,7 +2,7 @@
 
 > Estado vivo del proyecto. Se lee al iniciar sesión y se actualiza al cerrar si hubo cambios significativos.
 
-**Última actualización:** 2026-05-06 (sesión 7 — refinamiento DOCX + traducción ES/EN + docs migración Fase 6)
+**Última actualización:** 2026-05-07 (sesión 8 — validación MVP + commit a GitHub + preparación reunión Vidal)
 
 ---
 
@@ -10,7 +10,9 @@
 
 **Fases 0-4 + Fase 3 + Fase 6 ✅ completas.** Solo falta Fase 5 (pulido UX).
 
-**Próximo (mañana):** validación visual end-to-end del .docx con tablas nativas + traducción inglés + redactar correo formal a Vidal (arquitecto) con mini business case para solicitar EC2.
+**MVP cerrado para piloto interno.** Validación estética y de traducción aprobadas por Alberto. Repo GitHub actualizado (commit `48cb3c5`, 42 archivos +4533 / -128). Correo formal a Vidal enviado; respuesta a sus 4 puntos de agenda lista.
+
+**Próximo:** reunión con Vidal para cerrar alcance de provisión AWS y arrancar Fase A (containerización / hito M1).
 
 ---
 
@@ -186,3 +188,47 @@ Solicitado por Alberto al cierre de sesión 7. Características esperadas:
 - **Fuentes Alda Pro / Effra Pro**: opcionales — Georgia/Tahoma autorizadas oficialmente.
 
 Plan completo aprobado: `C:\Users\alber\.claude\plans\lee-el-archivo-claude-md-http-claude-md-dapper-giraffe.md`.
+
+---
+
+## Progreso de sesión 8 (2026-05-07)
+
+### Validación del MVP (estética y traducción)
+- Alberto validó visualmente el DOCX exportado: negritas reales, subtítulos, bullets, tablas nativas con bordes y font adaptable. ✅
+- Alberto validó la traducción ES → EN: inglés corporativo formal, términos técnicos preservados, formato intacto, doc original en español sin alterar. ✅
+- **Veredicto:** MVP cerrado para piloto interno. Pulido formal de plantilla diferido hasta antes de demo externa.
+
+### Commit y push a GitHub
+- Repo `AlbertoMafud/DocuMente` (privado).
+- Commit `48cb3c5` — *fases 3, 4 y 6 + features sesiones 6 y 7*. 42 archivos cambiados, +4533 / -128 líneas.
+- Excluidos del repo (gitignored): `docs/CORREO_VIDAL*.md`, `docs/MIGRATION_GUIA_EJECUTIVA.md`, `docs/REUNION_*.md`. Son drafts personales que viven solo en la laptop.
+- 174/174 tests pasan; ruff clean previo al commit.
+
+### Reunión con Vidal — preparación
+Vidal solicitó agenda con 4 puntos: demo + stack, volumen concurrente, clasificación de datos, integraciones requeridas.
+- **`docs/CORREO_VIDAL_RESPUESTA.md`** (gitignored): respuesta formal lista para enviar, ~280 palabras, anticipa cada uno de los 4 puntos con resumen ejecutivo + propone pre-lectura de `MIGRATION_TO_EC2.md` + agenda de 30 min.
+- **`docs/REUNION_VIDAL_PREP.md`** (gitignored): guía interna detallada para Alberto. Incluye:
+  - Script de demo de 10 min con timing por minuto.
+  - Stack técnico articulado por **decisiones**, no por listas.
+  - Cifras de volumen justificadas (5-10 piloto → 30-40 pico MRM).
+  - Clasificación de datos: Confidencial / Uso Interno; argumentos para Bedrock vs Anthropic directo.
+  - Integraciones MVP vs eventual v2 (clara separación de alcance).
+  - 10 preguntas probables de Vidal con respuestas listas.
+  - Lo que NO debes prometer.
+  - Cómo cerrar la reunión con próximos pasos concretos.
+
+### Lo que sigue inmediato
+
+1. **Enviar correo a Vidal** con la respuesta de `CORREO_VIDAL_RESPUESTA.md` y agendar.
+2. **Reunión con Vidal:** llevar la app cargada con doc real, `MIGRATION_TO_EC2.md` impreso/digital, y la guía `REUNION_VIDAL_PREP.md` solo para uso interno de Alberto.
+3. **Post-reunión:** arrancar Fase A (M1 — containerización con Dockerfile + docker-compose.yml). Esfuerzo: 1-2 días.
+4. **Fase 5 (UX final):** post-piloto inicial. Capturas de las 7 pantallas + demo grabada de 3 min para defender el proyecto a stakeholders (Isabel, comité MRM).
+
+---
+
+## Cierre sesión 8
+
+- MVP en estado de "listo para piloto interno". No hay deuda técnica bloqueante.
+- Repo en GitHub privado actualizado y limpio.
+- Materiales para reunión con TI/arquitecto preparados y separados (público técnico vs privado personal).
+- Bloqueos: ninguno técnico. Bloqueo organizacional: depende de agenda de Vidal y decisión de Compliance sobre Bedrock vs Anthropic directo.

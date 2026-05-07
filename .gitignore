@@ -86,5 +86,6 @@ assets/logo-smnyl.jpg
 
 # Documentos personales / drafts ejecutivos — no se commitean al repo público
 # (viven solo en la máquina del project owner)
-docs/CORREO_VIDAL.md
+docs/CORREO_VIDAL*.md
 docs/MIGRATION_GUIA_EJECUTIVA.md
+docs/REUNION_*.md
