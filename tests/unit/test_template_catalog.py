@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from src.core.template_catalog import TEMPLATE_MODEL_DEVELOPMENT, por_id
+from src.core.models import Seccion
+from src.core.template_catalog import (
+    TEMPLATE_MODEL_DEVELOPMENT,
+    construir_secciones_vacias,
+    por_id,
+)
 
 
 def test_catalogo_tiene_secciones() -> None:
@@ -42,3 +47,41 @@ def test_aliases_incluyen_traducciones_smnyl() -> None:
         None,
     )
     assert sec_objetivo is not None, "Debería haber una sección con alias 'objetivo'"
+
+
+def test_construir_secciones_vacias_devuelve_una_por_entrada_del_catalogo() -> None:
+    secciones = construir_secciones_vacias()
+    assert len(secciones) == len(TEMPLATE_MODEL_DEVELOPMENT)
+
+
+def test_construir_secciones_vacias_devuelve_lista_de_secciones() -> None:
+    secciones = construir_secciones_vacias()
+    assert all(isinstance(s, Seccion) for s in secciones)
+
+
+def test_construir_secciones_vacias_preserva_intencion_y_preguntas() -> None:
+    secciones = construir_secciones_vacias()
+    cat_por_id = {c.id: c for c in TEMPLATE_MODEL_DEVELOPMENT}
+    for seccion in secciones:
+        cat = cat_por_id[seccion.id]
+        assert seccion.nombre == cat.nombre
+        assert seccion.numero == cat.numero
+        assert seccion.obligatoria == cat.obligatoria
+        assert seccion.intencion == cat.intencion
+        assert seccion.preguntas_guia == list(cat.preguntas_guia)
+
+
+def test_construir_secciones_vacias_devuelve_secciones_vacias() -> None:
+    secciones = construir_secciones_vacias()
+    for seccion in secciones:
+        assert seccion.contenido is None
+        assert seccion.completitud == "vacia"
+        assert seccion.motivo_omision is None
+
+
+def test_construir_secciones_vacias_devuelve_lista_independiente() -> None:
+    """Cada llamada devuelve secciones nuevas — no comparte estado."""
+    a = construir_secciones_vacias()
+    b = construir_secciones_vacias()
+    a[0].contenido = "test"
+    assert b[0].contenido is None
