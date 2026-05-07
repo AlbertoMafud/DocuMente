@@ -14,6 +14,7 @@ from src.storage.repositories import DocumentoRepository
 from src.ui.components import header
 from src.ui.pages import (
     auditoria,
+    crear_nuevo,
     dashboard,
     entrevista,
     importar,
@@ -54,13 +55,14 @@ def _render_home() -> None:
 
     col_a, col_b, _ = st.columns([1, 1, 2])
     with col_a:
-        st.button(
+        if st.button(
             "Crear nuevo documento",
             type="primary",
             use_container_width=True,
-            disabled=True,
-            help="Disponible en Fase 2 (requiere motor de entrevista con Claude).",
-        )
+            help="Empieza con las 32 secciones vacías del template oficial NYL.",
+        ):
+            st.session_state["pagina"] = "crear_nuevo"
+            st.rerun()
     with col_b:
         if st.button("Mejorar documento existente", use_container_width=True):
             st.session_state["pagina"] = "importar"
@@ -124,6 +126,8 @@ def main() -> None:
         _render_home()
     elif pagina == "importar":
         importar.render()
+    elif pagina == "crear_nuevo":
+        crear_nuevo.render()
     elif pagina == "dashboard":
         dashboard.render()
     elif pagina == "entrevista":
