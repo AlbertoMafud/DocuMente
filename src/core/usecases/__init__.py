@@ -11,6 +11,7 @@ from src.core.usecases.cambiar_estado import (
     RegistrarSignoff,
     TransicionRechazada,
 )
+from src.core.usecases.crear_documento import CrearDocumentoEnBlanco
 from src.core.usecases.docx_writer import DocxWriter
 from src.core.usecases.drafter import Drafter
 from src.core.usecases.entrevista_uc import (
@@ -37,6 +38,7 @@ __all__ = [
     "SECCIONES_DATA_HEAVY",
     "AdjuntarTablaApendice",
     "CambiarEstadoDocumento",
+    "CrearDocumentoEnBlanco",
     "DocxWriter",
     "Drafter",
     "ExportarDocumento",
