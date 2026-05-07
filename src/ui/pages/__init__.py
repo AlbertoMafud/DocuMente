@@ -2,6 +2,7 @@
 
 from src.ui.pages import (
     auditoria,
+    crear_nuevo,
     dashboard,
     entrevista,
     importar,
@@ -11,6 +12,7 @@ from src.ui.pages import (
 
 __all__ = [
     "auditoria",
+    "crear_nuevo",
     "dashboard",
     "entrevista",
     "importar",
