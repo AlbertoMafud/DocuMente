@@ -106,6 +106,20 @@ class Documento(BaseModel):
         completas = sum(1 for s in oblig if s.completitud == "completa")
         return completas / len(oblig)
 
+    @property
+    def porcentaje_resuelto(self) -> float:
+        """Porcentaje de secciones obligatorias resueltas (completa + omitida).
+
+        Una sección omitida cuenta como resuelta porque el usuario afirmó
+        explícitamente que no aplica o no hay información, lo cual es una
+        decisión documentada — no una omisión por descuido.
+        """
+        oblig = self.secciones_obligatorias
+        if not oblig:
+            return 0.0
+        resueltas = sum(1 for s in oblig if s.completitud in ("completa", "omitida"))
+        return resueltas / len(oblig)
+
     def registrar_evento(self, evento: EventoAuditoria) -> None:
         """Agrega un evento al audit_trail y actualiza `actualizado_en`."""
         self.audit_trail.append(evento)

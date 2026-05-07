@@ -92,6 +92,7 @@ def _render_panel_preview(documento_id: UUID, seccion_id: str) -> None:
         "vacia": ("Vacía", SMNYL_COLORS["danger"]),
         "parcial": ("Parcial", SMNYL_COLORS["warning"]),
         "completa": ("Completa", SMNYL_COLORS["success"]),
+        "omitida": ("Omitida", SMNYL_COLORS["text_muted"]),
     }[seccion.completitud]
     st.markdown(
         f"<span style='display: inline-block; padding: 4px 12px; "

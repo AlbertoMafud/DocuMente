@@ -11,7 +11,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-Completitud = Literal["vacia", "parcial", "completa"]
+Completitud = Literal["vacia", "parcial", "completa", "omitida"]
 
 
 class Seccion(BaseModel):
@@ -50,6 +50,10 @@ class Seccion(BaseModel):
     preguntas_guia: list[str] = Field(
         default_factory=list,
         description="Preguntas que el InterviewEngine usará para llenar esta sección.",
+    )
+    motivo_omision: str | None = Field(
+        default=None,
+        description="Si la sección se marcó como omitida, justificación capturada del usuario.",
     )
 
     @property

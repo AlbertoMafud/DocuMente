@@ -31,11 +31,11 @@ Los siguientes seis principios se aplican desde la primera línea de código:
 
 > Esta sección se actualiza con cada release del MVP.
 
-| Aspecto | Estado actual (Fase 2 completa) |
+| Aspecto | Estado actual (Fases 0–4 completas, sesión 7) |
 |---|---|
 | Lenguaje | Python 3.11+ |
-| UI | Streamlit (local, single-user) — router con 4 pantallas (home/importar/dashboard/entrevista) |
-| LLM | Anthropic API directo vía `AnthropicClient`. Modelo: `claude-opus-4-7` con adaptive thinking. Prompt caching agresivo en contexto fijo (~12K tokens). |
+| UI | Streamlit (local, single-user) — router con 7 pantallas (home, importar, onboarding, dashboard, entrevista, vista_previa, auditoria) |
+| LLM | Anthropic API directo vía `AnthropicClient` con estrategia tiered: Sonnet 4.6 (chat), Opus 4.7 (drafting), Haiku 4.5 (extraction). Prompt caching agresivo en contexto fijo (~12K tokens) |
 | LLM abstraction | `LLMClient` Protocol — listo para swap a Bedrock sin tocar lógica de negocio |
 | Persistencia | SQLite vía SQLAlchemy + Repository pattern (Documentos + Estados de entrevista). URL configurable por `DATABASE_URL` |
 | Storage de archivos | `FilesystemStorage` implementa interfaz `Storage` (ya lista para swap a S3) |
@@ -44,6 +44,10 @@ Los siguientes seis principios se aplican desde la primera línea de código:
 | Logs | (pendiente) `structlog` a stdout |
 | Despliegue | `streamlit run app.py` en local |
 | Containerización | Ninguna |
+| Generación DOCX | `DocxWriter` con `docxtpl` + plantilla maestra editada manualmente; Subdoc + RichText con bold/italic reales; tablas nativas con `Table Grid` y font adaptable |
+| Multilenguaje | Toggle ES/EN en export. `TraductorDocumento` con prompt para inglés corporativo americano (efímero, no se persiste) |
+| State machine | `DocumentStateMachine` con 5 estados oficiales MRM + sign-offs Reviewer/FAE como audit events inmutables |
+| Tests | 174 tests pasan; ruff clean; mypy strict |
 
 ---
 
@@ -74,6 +78,16 @@ Los siguientes seis principios se aplican desde la primera línea de código:
 | 19 | Pantalla onboarding | Streamlit form con persistencia vía `DocumentoRepository` | Sin cambios | Nulo | ✅ Fase 2.5 |
 | 20 | Apendices (Excel/CSV) | `Apendice` persistido con documento; archivos Excel/CSV en `Storage` (filesystem MVP) | Migrar archivos a S3 = swap del adaptador `Storage`. Apéndices ya tienen `archivo_id_storage` apuntando al ID interno del Storage. | Bajo | ✅ Fase 2.5 |
 | 21 | Vista previa HTML | Streamlit pure (sin servir HTML por separado) | Sin cambios. Si se quiere endpoint público de preview, generar HTML estático desde el modelo Pydantic | Bajo | ✅ Fase 2.5 |
+| 22 | DocumentStateMachine + transiciones | Lógica pura en `src/core/rules/`. State machine valida `draft → in_review → approved → published → retired` contra reglas MRM §10 | Sin cambios. Lógica pura, sin I/O | Nulo | ✅ Fase 4 |
+| 23 | Sign-offs Reviewer/FAE | Audit events inmutables `signoff_reviewer` y `signoff_fae`. UI con checkbox de afirmación de independencia | En multi-user real, vincular sign-off al `user_id` del actor (ya disponible en modelo) | Bajo | ✅ Fase 4 |
+| 24 | Timeline de auditoría (UI) | Componente Streamlit con CSS custom inyectado. Filtros por tipo de evento | Sin cambios | Nulo | ✅ Fase 4 |
+| 25 | Omitir sección con motivo | `Completitud` extendido con `"omitida"`; nuevo evento `seccion_omitida`; state machine usa `porcentaje_resuelto` | Sin cambios; aditivo y backward-compatible | Nulo | ✅ Sesión 7 |
+| 26 | DocxWriter | `docxtpl` + plantilla `model_development_smnyl_final.docx`; Subdoc con RichText (bold/italic reales); tablas nativas con `Table Grid` y font adaptable; `TableExtractor` con Haiku para 4 secciones tabulares | Sin cambios al código. La plantilla maestra debe seguir presente en `src/docs/templates/`; cuando S3 sea storage, la plantilla puede vivir en S3 o en disco del contenedor | Bajo | ✅ Fase 3 |
+| 27 | ExportarDocumento + audit `exportado` | Use case orquestador: TableExtractor + DocxWriter + audit. UI con `st.download_button` post-generación | Sin cambios | Nulo | ✅ Fase 3 |
+| 28 | TraductorDocumento (ES → EN) | Use case con prompt específico para U.S. corporate English. Sonnet (no Opus). Mutación efímera del documento — no persiste traducción | Sin cambios. Si TI elige Bedrock, sigue funcionando idéntico (mismo Protocol). | Nulo | ✅ Sesión 7 |
+| 29 | Toggle de idioma en UI | Modal `st.dialog` en dashboard con radio Español / English; pasa `idioma_objetivo` al use case | Sin cambios | Nulo | ✅ Sesión 7 |
+| 30 | Editor de metadata del modelo | Modal `st.dialog` para editar 8 campos clave; cambios registrados en audit como `metadata_actualizada` con delta exacto | Sin cambios | Nulo | ✅ Sesión 7 |
+| 31 | Apéndices con tabla nativa | `markdown_blocks` separa contenido_md en `BloqueProsa` y `BloqueTabla`. Las tablas se incrustan con `subdoc.add_table()` y font 7-10pt adaptable | Sin cambios | Nulo | ✅ Sesión 7 |
 | — | *(filas se agregan aquí conforme avance el MVP)* | | | | |
 
 **Convención de filas:**
@@ -190,3 +204,198 @@ Antes de cerrar el MVP, ejecutar checklist:
 - [ ] Tests pasan en CI (cuando exista)
 
 Si todo pasa → **migración será mecánica**. Si algo falla → refactor antes de cerrar MVP.
+
+---
+
+## 8. Runbook de migración (paso a paso para el arquitecto)
+
+> Esta sección es lo que el arquitecto ejecuta. Asume que ya tiene clonado el repo, acceso SSH a una EC2 ya provisionada, y endpoints de RDS y S3.
+
+### 8.1 Archivos del repo que SÍ se copian a EC2
+
+```
+DocuMente/
+├── app.py                    # entry point
+├── pyproject.toml            # dependencias y configuración
+├── src/                      # todo el código fuente
+│   ├── core/                 # dominio + use cases
+│   ├── llm/                  # cliente LLM + prompts
+│   ├── ui/                   # páginas y componentes Streamlit
+│   ├── docs/                 # reader, writer, plantilla
+│   │   └── templates/
+│   │       └── model_development_smnyl_final.docx   # CRÍTICO: el activo estético
+│   ├── storage/              # repositorios y storage abstraction
+│   └── config.py             # carga de settings
+├── tests/                    # tests automatizados (para correr en EC2 si quieren)
+├── docs/                     # documentación (este archivo + MRM_REQUIREMENTS, etc.)
+├── assets/                   # logo SMNYL + fonts (no incluye el .docx plantilla)
+└── README.md
+```
+
+### 8.2 Archivos / carpetas que NO se copian
+
+| Archivo / carpeta | Por qué no |
+|---|---|
+| `.env` | Contiene credenciales locales. En EC2 se crea uno nuevo con valores de Secrets Manager |
+| `data/documente.db` | Base de datos local (SQLite). En EC2 los datos viven en RDS PostgreSQL — vacía al inicio |
+| `data/uploads/`, `data/exports/`, `data/backups/` | Archivos locales del usuario. En EC2 viven en S3 — bucket vacío al inicio |
+| `.venv/` o `venv/` | Entorno Python local. Se reinstala en EC2 con `pip install -e ".[dev]"` |
+| `__pycache__/`, `*.pyc` | Caché de Python. Se regenera |
+| `.pytest_cache/`, `.ruff_cache/` | Caché de tooling. Se regenera |
+| `.git/` | Si se clona vía `git clone`, ya viene incluido y eso está OK. Si se hace `scp -r`, no se copia y luego no hay forma de actualizar |
+| Archivos `~$<nombre>.docx` | Lock files de Word abierto en local |
+
+**Recomendación:** clonar el repo desde un GitHub privado de SMNYL (no `scp` de la máquina de Alberto). Eso permite que cada deploy futuro sea `git pull`.
+
+### 8.3 Variables de entorno requeridas en EC2
+
+Todas viven en `/etc/documente/.env` (o equivalente) y son leídas por `pydantic-settings` al arrancar:
+
+```env
+# === LLM ===
+ANTHROPIC_API_KEY=sk-ant-api03-...               # Key corporativa SMNYL, NO la personal de Alberto
+# (alternativa) AWS_BEDROCK=true                  # Si TI elige Bedrock; ANTHROPIC_API_KEY no se usa
+
+# === Persistencia ===
+DATABASE_URL=postgresql://documente:<pass>@<rds-endpoint>:5432/documente
+
+# === Storage ===
+STORAGE_BACKEND=s3                                # 'filesystem' (MVP) o 's3' (prod)
+S3_BUCKET=smnyl-documente-uploads-prod
+AWS_REGION=us-east-1
+# (las credenciales IAM las hereda la EC2 vía role; no se ponen aquí)
+
+# === Auth ===
+AUTH_BACKEND=cognito                              # 'none' (MVP), 'cognito', o 'streamlit-authenticator'
+COGNITO_USER_POOL_ID=us-east-1_XXXXX
+COGNITO_CLIENT_ID=...
+
+# === Configuración general ===
+USER_ID_DEFAULT=default                           # Solo se usa si AUTH_BACKEND=none
+LOG_LEVEL=INFO
+EXPORTS_PATH=/tmp/documente-exports               # Solo si STORAGE_BACKEND=filesystem
+```
+
+### 8.4 Comandos de instalación (paso a paso)
+
+```bash
+# Conectar
+ssh -i smnyl-key.pem ec2-user@documente.smnyl.local
+
+# Setup base
+sudo yum install -y python3.11 git nginx
+sudo useradd -m documente
+sudo mkdir -p /opt/documente /etc/documente
+
+# Clonar
+sudo -u documente git clone <github-url> /opt/documente
+cd /opt/documente
+
+# Entorno virtual
+sudo -u documente python3.11 -m venv .venv
+sudo -u documente .venv/bin/pip install --upgrade pip
+sudo -u documente .venv/bin/pip install -e ".[dev]"
+
+# Configuración (.env desde Secrets Manager)
+sudo aws secretsmanager get-secret-value --secret-id documente/prod/env \
+    --query SecretString --output text | sudo tee /etc/documente/.env
+sudo chmod 600 /etc/documente/.env
+
+# Migración de schema (PostgreSQL)
+sudo -u documente .venv/bin/python -m src.storage.init_schema
+
+# Servicio systemd (ver §8.5)
+sudo cp deploy/documente.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable documente
+sudo systemctl start documente
+
+# nginx delante (ver §8.6)
+sudo cp deploy/documente.nginx.conf /etc/nginx/conf.d/documente.conf
+sudo systemctl reload nginx
+```
+
+### 8.5 Servicio systemd (`/etc/systemd/system/documente.service`)
+
+```ini
+[Unit]
+Description=DocuMente Streamlit App
+After=network.target
+
+[Service]
+Type=simple
+User=documente
+WorkingDirectory=/opt/documente
+EnvironmentFile=/etc/documente/.env
+ExecStart=/opt/documente/.venv/bin/python -m streamlit run app.py \
+    --server.port 8501 \
+    --server.address 127.0.0.1 \
+    --server.headless true
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+### 8.6 nginx delante (HTTPS)
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name documente.smnyl.local;
+
+    ssl_certificate /etc/ssl/smnyl/cert.pem;
+    ssl_certificate_key /etc/ssl/smnyl/key.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:8501;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_read_timeout 86400;
+    }
+}
+```
+
+### 8.7 Subsecuentes deploys (cuando se mergea código nuevo)
+
+```bash
+ssh ec2-user@documente.smnyl.local
+cd /opt/documente
+sudo -u documente git pull
+sudo -u documente .venv/bin/pip install -e ".[dev]"
+sudo systemctl restart documente
+```
+
+Si hay CI/CD: este flujo se automatiza vía GitHub Actions / CodePipeline (M6).
+
+### 8.8 Plan de rollback
+
+Si un deploy rompe algo:
+
+```bash
+cd /opt/documente
+sudo -u documente git log --oneline -5      # ver commits recientes
+sudo -u documente git reset --hard <hash-anterior>
+sudo -u documente .venv/bin/pip install -e ".[dev]"
+sudo systemctl restart documente
+```
+
+Datos en BD/S3 NO se afectan por rollback de código (excepto si hubo migration que cambió schema — diseñar migrations aditivas para evitar esto).
+
+### 8.9 Checklist de validación post-deploy
+
+Después de cada deploy a EC2:
+
+- [ ] `systemctl status documente` → `active (running)`
+- [ ] `curl -k https://documente.smnyl.local/_stcore/health` → `200 OK`
+- [ ] Login con un usuario de prueba funciona
+- [ ] Importar un `.docx` de prueba funciona
+- [ ] Exportar un `.docx` (en español e inglés) funciona
+- [ ] CloudWatch muestra logs de la app sin errores
+- [ ] RDS conexión OK; tabla `documentos` accesible
+- [ ] S3 escritura/lectura OK; bucket vacío inicialmente
+- [ ] Tests automatizados corren contra el ambiente: `pytest tests/integration/ -k "smoke"`
+

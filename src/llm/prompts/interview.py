@@ -50,7 +50,7 @@ def formato_estado_documento(documento: Documento) -> str:
     lineas.append(f"**Completitud global:** {int(documento.porcentaje_completitud * 100)}%")
     lineas.append("\n**Estado de secciones obligatorias:**")
     for s in documento.secciones_obligatorias:
-        marcador = {"completa": "✓", "parcial": "~", "vacia": "✗"}[s.completitud]
+        marcador = {"completa": "✓", "parcial": "~", "vacia": "✗", "omitida": "—"}[s.completitud]
         lineas.append(f"- [{marcador}] {s.numero} {s.nombre}")
     return "\n".join(lineas)
 

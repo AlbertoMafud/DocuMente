@@ -12,7 +12,14 @@ import streamlit as st
 
 from src.storage.repositories import DocumentoRepository
 from src.ui.components import header
-from src.ui.pages import dashboard, entrevista, importar, onboarding, vista_previa
+from src.ui.pages import (
+    auditoria,
+    dashboard,
+    entrevista,
+    importar,
+    onboarding,
+    vista_previa,
+)
 from src.ui.theme import SMNYL_COLORS, apply_smnyl_theme
 
 ASSETS_DIR = Path(__file__).parent / "assets"
@@ -125,6 +132,8 @@ def main() -> None:
         onboarding.render()
     elif pagina == "vista_previa":
         vista_previa.render()
+    elif pagina == "auditoria":
+        auditoria.render()
     else:
         st.error(f"Página desconocida: {pagina}")
         st.session_state["pagina"] = "home"

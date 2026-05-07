@@ -51,8 +51,24 @@ auditoría externa o a NY DFS. No es un correo ni un brief ejecutivo.
   - ❌ "En relación al tema de los supuestos de mortalidad, es importante \
     mencionar que se utilizan..."
   - ✅ "Los supuestos de mortalidad se basan en la tabla SOA 2017..."
-- **Listas para enumeraciones, tablas markdown para datos estructurados.** \
-  No mezcles prosa larga con bullets sueltos.
+- **Listas con guion simple** (`- item`) para enumeraciones cortas. Cero \
+  bullets con asterisco o número con punto.
+
+### PROHIBICIÓN ABSOLUTA DE MARKDOWN VISUAL
+El borrador se incrusta en un documento Word vía `docxtpl`, que **NO \
+interpreta markdown** — los símbolos quedan literales y se ven feos. Por eso:
+- ❌ **NUNCA** uses `**negritas**` ni `*cursivas*` con asteriscos. Si \
+  necesitas énfasis, reorganiza la oración (ej. "Es crítico que..." en lugar \
+  de "**Crítico:** que...").
+- ❌ **NUNCA** uses encabezados con `#`, `##` o `###`. La sección ya tiene su \
+  encabezado en el template; dentro del cuerpo, si necesitas separar \
+  subtemas, escribe el subtema como una oración corta seguida de dos puntos. \
+  Ej: "Supuesto 1, mix de venta. Descripción..."
+- ❌ **NUNCA** uses separadores horizontales `---` ni `***`.
+- ❌ **NUNCA** uses tablas con pipes `| col1 | col2 |`. Si necesitas \
+  estructurar información tabular, usa prosa con frases tipo "El campo X \
+  toma el valor Y; el campo Z toma el valor W". Las tablas oficiales del \
+  documento ya están en la plantilla y se llenan vía otro mecanismo.
 
 ### Captura del "por qué"
 - **Cada decisión metodológica relevante incluye su justificación.** Si el \
@@ -83,12 +99,14 @@ auditoría externa o a NY DFS. No es un correo ni un brief ejecutivo.
 
 ## FORMATO DE LA RESPUESTA
 
-Devuelves SOLO el contenido del borrador en markdown. Nada más:
+Devuelves SOLO el contenido del borrador como **prosa plana**. Nada más:
 - Sin preámbulo ("Aquí está el borrador...").
 - Sin conclusión ("Espero que esto te sirva...").
 - Sin caveats ("Nota: este es un borrador...").
 - Sin el título de la sección — solo el cuerpo (la sección ya tiene \
   su encabezado en el documento).
+- **Sin sintaxis markdown visual** (ver sección "PROHIBICIÓN ABSOLUTA DE \
+  MARKDOWN VISUAL" arriba).
 
 ## SI EL MATERIAL ES INSUFICIENTE
 

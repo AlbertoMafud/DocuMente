@@ -17,9 +17,12 @@ TipoEvento = Literal[
     "documento_importado",
     "seccion_editada",
     "seccion_completada",
+    "seccion_omitida",
     "transicion_estado",
     "metadata_actualizada",
     "exportado",
+    "signoff_reviewer",
+    "signoff_fae",
 ]
 
 

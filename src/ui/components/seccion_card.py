@@ -11,6 +11,7 @@ _COLORS_POR_COMPLETITUD = {
     "vacia": (SMNYL_COLORS["danger"], "Vacía"),
     "parcial": (SMNYL_COLORS["warning"], "Parcial"),
     "completa": (SMNYL_COLORS["success"], "Completa"),
+    "omitida": (SMNYL_COLORS["text_muted"], "Omitida"),
 }
 
 
@@ -25,14 +26,27 @@ def render(seccion: Seccion, *, brechas_count: int = 0) -> None:
     )
 
     chars = len(seccion.contenido or "")
-    chars_str = f"{chars:,} caracteres" if chars else "sin contenido"
+    if seccion.completitud == "omitida":
+        chars_str = "—"
+    elif chars:
+        chars_str = f"{chars:,} caracteres"
+    else:
+        chars_str = "sin contenido"
 
     brechas_html = (
         f"<span style='color: {SMNYL_COLORS['danger']}; font-size: 0.75rem;'>"
         f"{brechas_count} brecha(s)</span>"
-        if brechas_count
+        if brechas_count and seccion.completitud != "omitida"
         else ""
     )
+
+    motivo_html = ""
+    if seccion.completitud == "omitida" and seccion.motivo_omision:
+        motivo_html = (
+            f"<div style='margin-top: 6px; font-size: 0.75rem;"
+            f" color: {SMNYL_COLORS['text_muted']}; font-style: italic;'>"
+            f"Motivo: {seccion.motivo_omision}</div>"
+        )
 
     with st.container(border=True):
         st.markdown(
@@ -61,6 +75,7 @@ def render(seccion: Seccion, *, brechas_count: int = 0) -> None:
                 </span>
                 {brechas_html}
             </div>
+            {motivo_html}
             """,
             unsafe_allow_html=True,
         )

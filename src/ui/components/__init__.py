@@ -7,6 +7,7 @@ from src.ui.components import (
     header,
     loading_state,
     seccion_card,
+    timeline,
 )
 
 __all__ = [
@@ -16,4 +17,5 @@ __all__ = [
     "header",
     "loading_state",
     "seccion_card",
+    "timeline",
 ]
