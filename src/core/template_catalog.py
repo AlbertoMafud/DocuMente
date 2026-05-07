@@ -1,6 +1,6 @@
 """Catálogo del template oficial NYL Model Development.
 
-Esta es la **representación en código** de las 32 secciones definidas en
+Esta es la **representación en código** de las 28 secciones definidas en
 `docs/TEMPLATE_MODEL_DEV.md`. Es la fuente que consume `DocxReader` para
 mapear contenido extraído a IDs de sección, y `GapAnalyzer` para evaluar
 completitud contra el estándar.

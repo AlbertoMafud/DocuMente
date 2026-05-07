@@ -1,6 +1,6 @@
 """Use case: CrearDocumentoEnBlanco.
 
-Crea un Documento esqueleto con las 32 secciones del template oficial NYL
+Crea un Documento esqueleto con las 28 secciones del template oficial NYL
 todas vacías, metadata mínima, audit event 'documento_creado' y lo persiste.
 
 Es el punto de entrada del flujo "desde cero" — paralelo a ImportarDocumento.

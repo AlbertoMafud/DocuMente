@@ -30,7 +30,7 @@ def render() -> None:
         <p style="color: {SMNYL_COLORS["text_muted"]}; margin-bottom: 2rem;
             max-width: 720px;">
             Empezarás con la estructura completa del Model Development Template
-            oficial de NYL — 32 secciones vacías. DocuMente te guiará para llenarlas
+            oficial de NYL — 28 secciones vacías. DocuMente te guiará para llenarlas
             con apoyo de Claude.
         </p>
         """,

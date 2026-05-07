@@ -59,7 +59,7 @@ def _render_home() -> None:
             "Crear nuevo documento",
             type="primary",
             use_container_width=True,
-            help="Empieza con las 32 secciones vacías del template oficial NYL.",
+            help="Empieza con las 28 secciones vacías del template oficial NYL.",
         ):
             st.session_state["pagina"] = "crear_nuevo"
             st.rerun()
