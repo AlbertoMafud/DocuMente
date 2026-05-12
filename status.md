@@ -2,17 +2,17 @@
 
 > Estado vivo del proyecto. Se lee al iniciar sesión y se actualiza al cerrar si hubo cambios significativos.
 
-**Última actualización:** 2026-05-07 (sesión 8 — validación MVP + commit a GitHub + preparación reunión Vidal)
+**Última actualización:** 2026-05-12 (sesión 9 — flujo "crear desde cero" + docs de soporte para Vidal + simulación E2E)
 
 ---
 
 ## Estado actual
 
-**Fases 0-4 + Fase 3 + Fase 6 ✅ completas.** Solo falta Fase 5 (pulido UX).
+**Fases 0-4 + Fase 3 + Fase 6 ✅ completas + feature "crear desde cero" ✅ (sesión 9).** Solo falta Fase 5 (pulido UX).
 
-**MVP cerrado para piloto interno.** Validación estética y de traducción aprobadas por Alberto. Repo GitHub actualizado (commit `48cb3c5`, 42 archivos +4533 / -128). Correo formal a Vidal enviado; respuesta a sus 4 puntos de agenda lista.
+**MVP cerrado para piloto interno con dos puertas de entrada al flujo:** importar `.docx` existente Y crear desde cero. Repo GitHub `AlbertoMafud/DocuMente` actualizado al commit de merge `45748b4` (sesión 9, 7 commits adelante del cierre de sesión 8). 182 tests pasando, ruff/mypy clean en archivos nuevos.
 
-**Próximo:** reunión con Vidal para cerrar alcance de provisión AWS y arrancar Fase A (containerización / hito M1).
+**Próximo:** Alberto valida calidad del simulado E2E (`docs/E2E_TEST_SCENARIO.md`, checklist §7, ~60-90 min) → decide si ejecutar contra app real o pasar directo a stakeholders → reunión con Vidal (materiales `MIGRATION_TO_EC2.md` y `technical_architecture_for_data_architect.md` listos) → arrancar Fase A / hito M1 (containerización).
 
 ---
 
@@ -31,6 +31,8 @@
 - Feature **"Tablas nativas + font adaptable"** ✅ (sesión 7) — apéndices con tabla markdown se renderizan como tablas nativas de Word con bordes y font 7-10pt según densidad.
 - Feature **"Traducción ES/EN"** ✅ (sesión 7) — toggle al exportar; inglés corporativo americano con prompt específico; traducción efímera (no se persiste).
 - Feature **"Cleanup de markdown"** ✅ (sesión 7) — quita asteriscos, hashes, separadores `---` literales del DOCX.
+- Feature **"Crear documento desde cero"** ✅ (sesión 9) — pantalla `crear_nuevo.py` con form de 2 campos (nombre + model_id), use case `CrearDocumentoEnBlanco`, función pública `construir_secciones_vacias()` promovida a `template_catalog`. Botón habilitado en home; routing conectado. Flujo paralelo al de importar — converge en onboarding → dashboard → entrevista → export.
+- **Documentación de soporte para arquitecto y validación** ✅ (sesión 9) — 3 documentos extensos generados: `docs/technical_architecture_for_data_architect.md` (1,351 líneas, 15 secciones en inglés para Vidal), `docs/E2E_TEST_SCENARIO.md` (2,158 líneas, simulación MRM-grade del Pricing GMM Individual con 28 secciones), `docs/DOCUMENTE_GUIA_PERSONAL.md` (397 líneas, guía ejecutiva en español, gitignored).
 
 ---
 
@@ -232,3 +234,72 @@ Vidal solicitó agenda con 4 puntos: demo + stack, volumen concurrente, clasific
 - Repo en GitHub privado actualizado y limpio.
 - Materiales para reunión con TI/arquitecto preparados y separados (público técnico vs privado personal).
 - Bloqueos: ninguno técnico. Bloqueo organizacional: depende de agenda de Vidal y decisión de Compliance sobre Bedrock vs Anthropic directo.
+
+---
+
+## Progreso de sesión 9 (2026-05-12)
+
+### Feature — Flujo "Crear documento desde cero"
+
+Se completó el segundo punto de entrada al flujo de DocuMente. Antes solo se podía mejorar un `.docx` existente; ahora también se puede arrancar con las 28 secciones vacías del template oficial NYL. Ambos flujos convergen en `onboarding → dashboard → entrevista → export`.
+
+**Implementación (5 commits, +328 / -22 líneas de código):**
+
+| Commit | Cambio |
+|---|---|
+| `2fe8612` | refactor: promover `construir_secciones_vacias()` de `src/docs/reader.py` (privada) a `src/core/template_catalog.py` (pública) |
+| `f1e7879` | feat: nuevo use case `CrearDocumentoEnBlanco` en `src/core/usecases/crear_documento.py` (57 líneas, 10 tests TDD) |
+| `02fb76c` | feat: pantalla `src/ui/pages/crear_nuevo.py` (81 líneas) con form de 2 campos (nombre + model_id) |
+| `781c952` | feat: botón "Crear nuevo documento" en home enabled + routing + import en `app.py` |
+| `7fbe3c8` | fix: conteo de secciones del template (32 → 28) en 4 lugares (docstrings + body copy + help text) |
+
+**Calidad:**
+- 182 tests pasando (172 baseline + 5 del builder público + 5 nuevos del use case). Las 7 fallas de `tests/integration/test_import_end_to_end.py` son **pre-existentes** (fixtures faltantes en worktrees), no regresiones.
+- `ruff check` + `ruff format` clean.
+- `mypy --strict` clean en archivos nuevos (los 11 errores pre-existentes en otros archivos no se tocaron).
+- Cada commit pasó por revisión de spec compliance + revisión de code quality vía subagent-driven development.
+
+### Documentos generados — 3 deliverables grandes
+
+| Archivo | Líneas | Propósito | Estado |
+|---|---|---|---|
+| `docs/E2E_TEST_SCENARIO.md` | 2,158 | Simulación end-to-end MRM-grade del **Modelo de Pricing GMM Individual — Nuevos Negocios** (ficticio, Tier High). Cubre las 28 secciones del template (22 mandatorias completas + 3 opcionales completas + 3 omitidas), transcripts de interview, drafts MRM-grade, apéndice Excel en 4.4, tablas extraídas por Haiku en 5.1/5.2/5.5/6.5, state transitions, sign-offs Reviewer + FAE, export ES + EN, audit trail completo (~113 eventos), métricas de uso ($16 USD/documento estimado), checklist de validación (8 categorías). | En main |
+| `docs/technical_architecture_for_data_architect.md` | 1,351 | Documento técnico en **inglés** para Vidal (arquitecto de datos) con las 15 secciones de arquitectura del proyecto: executive summary, layers (UI/Application/Domain/Infrastructure), data architecture (8 entidades core), tech stack, data flow, modules, storage & persistence, scalability roadmap (MVP → AWS), 8 architectural decisions, NFRs, security & access control, performance & monitoring, DR & backup, AWS infrastructure (con diagrama ASCII), API contracts. | En main |
+| `docs/DOCUMENTE_GUIA_PERSONAL.md` | 397 | Guía nivel ejecutivo en **español** para Alberto: qué es DocuMente, problema que resuelve, arquitectura por capas con analogías de restaurante, stack tecnológico con "por qué" de cada elección, 8 decisiones arquitectónicas con trade-offs, **10 preguntas probables del arquitecto con respuestas listas**, estado actual y roadmap, glosario. | **Gitignored** (local-only) |
+
+### Limpieza de repo
+
+- Worktree `cool-wing-eca24c` desregistrado de git.
+- Branch `claude/cool-wing-eca24c` borrado (mergeado a main).
+- **Carpeta huérfana `.claude/worktrees/cool-wing-eca24c` quedó residual en disco** — no se pudo borrar por handle del shell del sandbox. Borrar manualmente desde Windows Explorer cuando convenga (no afecta git).
+- `main` empujado a `origin/main` en GitHub privado `AlbertoMafud/DocuMente`. Commit final: `45748b4` (merge --no-ff).
+
+### Lo que sigue inmediato (sesión 10)
+
+1. **Alberto valida `docs/E2E_TEST_SCENARIO.md`** aplicando el checklist §7 (~60-90 min). Decisiones derivadas:
+   - Si calidad simulada se siente fuerte → arrancar validación real con stakeholders directamente.
+   - Si hay gaps → iterar prompts en `src/llm/prompts/` antes de mostrar a nadie (la tabla en §6 del E2E indica exactamente qué archivo tocar según el gap).
+2. **Decidir si el simulado se convierte en test automatizado permanente** (opción C en §8 del E2E): 1-2 días de trabajo para mockear LLM y validar export.
+3. **Reunión con Vidal** sigue siendo el path principal hacia AWS. Los dos documentos para él ya están listos en main:
+   - `docs/MIGRATION_TO_EC2.md` (runbook técnico con §8 paso a paso)
+   - `docs/technical_architecture_for_data_architect.md` (arquitectura completa nuevo)
+4. **Post-reunión Vidal:** arrancar M1 (containerización Docker + docker-compose). 1-2 días.
+5. **Fase 5** (collateral UX): capturas de pantallas, demo grabada 3 min, microinteracciones — para defender ante Isabel/Comité MRM cuando llegue ese momento.
+
+### Bloqueos conocidos
+
+- **Carpeta huérfana del worktree** en `.claude/worktrees/cool-wing-eca24c` (cosmético, borrar manualmente).
+- **Pulido formal de plantilla `.docx`** sigue diferido hasta antes de demo externa.
+- **Bedrock vs Anthropic API directa**: pendiente decisión de Compliance.
+- **`ANTHROPIC_API_KEY`** en `.env` — sigue siendo precondición para usar entrevista/drafting/export EN.
+
+---
+
+## Cierre sesión 9
+
+- Feature "crear desde cero" en producción local. Dos puertas de entrada al flujo (importar + crear) cubren los dos casos de uso reales: documentar modelo existente sin documentación previa, vs documentar modelo nuevo desde su concepción.
+- Repo GitHub sincronizado en `45748b4`. Working tree limpio.
+- 3 documentos de soporte generados que cubren las tres audiencias clave: tú (guía personal en español), Vidal (arquitectura técnica en inglés), validación interna (simulación E2E MRM-grade con checklist).
+- Bloqueos: ninguno técnico. Ahora todo está en manos de la validación y de las decisiones organizacionales (Compliance, Vidal).
+
+**Handoff a sesión 10:** Alberto tiene comentarios acumulados que va a traer a la próxima sesión. Leer este `status.md` + el `MEMORY.md` + el `next_session_handoff.md` antes de arrancar trabajo.
