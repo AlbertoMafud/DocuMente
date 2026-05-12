@@ -25,6 +25,7 @@ from src.core.models import Documento, EventoAuditoria, Seccion
 from src.core.template_catalog import (
     TEMPLATE_MODEL_DEVELOPMENT,
     SeccionCatalogo,
+    construir_secciones_vacias,
 )
 
 _NUM_PREFIX_RE = re.compile(r"^\s*(\d+(?:\.\d+)*)\.?\s+(.+)$")
@@ -89,21 +90,6 @@ def _evaluar_completitud(contenido: str) -> str:
     return "completa"
 
 
-def _construir_secciones_iniciales() -> list[Seccion]:
-    """Crea una Seccion vacía para cada entrada del catálogo."""
-    return [
-        Seccion(
-            id=cat.id,
-            nombre=cat.nombre,
-            numero=cat.numero,
-            obligatoria=cat.obligatoria,
-            intencion=cat.intencion,
-            preguntas_guia=list(cat.preguntas_guia),
-        )
-        for cat in TEMPLATE_MODEL_DEVELOPMENT
-    ]
-
-
 class DocxReader:
     """Lector de archivos .docx que produce un `Documento` poblado.
 
@@ -121,7 +107,7 @@ class DocxReader:
         documento = Documento(
             user_id=user_id,
             archivo_origen=str(ruta),
-            secciones=_construir_secciones_iniciales(),
+            secciones=construir_secciones_vacias(),
         )
 
         # Recorrer párrafos acumulando contenido por sección detectada.

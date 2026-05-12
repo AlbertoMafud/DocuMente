@@ -1,6 +1,6 @@
 """Catálogo del template oficial NYL Model Development.
 
-Esta es la **representación en código** de las 32 secciones definidas en
+Esta es la **representación en código** de las 28 secciones definidas en
 `docs/TEMPLATE_MODEL_DEV.md`. Es la fuente que consume `DocxReader` para
 mapear contenido extraído a IDs de sección, y `GapAnalyzer` para evaluar
 completitud contra el estándar.
@@ -13,6 +13,8 @@ manteniéndolos sincronizados.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+
+from src.core.models import Seccion
 
 
 @dataclass(frozen=True)
@@ -319,3 +321,25 @@ TEMPLATE_MODEL_DEVELOPMENT: tuple[SeccionCatalogo, ...] = (
 def por_id(seccion_id: str) -> SeccionCatalogo | None:
     """Devuelve la entrada del catálogo por ID, o None."""
     return next((s for s in TEMPLATE_MODEL_DEVELOPMENT if s.id == seccion_id), None)
+
+
+def construir_secciones_vacias() -> list[Seccion]:
+    """Devuelve una `Seccion` vacía por cada entrada del catálogo.
+
+    Usado por:
+    - `DocxReader` al importar un .docx (las secciones detectadas se llenan al parsear).
+    - `CrearDocumentoEnBlanco` al crear un doc desde cero (todas quedan vacías).
+
+    Cada llamada devuelve secciones independientes — no comparte estado.
+    """
+    return [
+        Seccion(
+            id=cat.id,
+            nombre=cat.nombre,
+            numero=cat.numero,
+            obligatoria=cat.obligatoria,
+            intencion=cat.intencion,
+            preguntas_guia=list(cat.preguntas_guia),
+        )
+        for cat in TEMPLATE_MODEL_DEVELOPMENT
+    ]
