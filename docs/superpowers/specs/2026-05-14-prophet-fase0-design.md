@@ -28,7 +28,7 @@ El área de Modelos Actuariales (MA) necesita documentar sus modelos Prophet con
 | Import del Excel | Selección individual de modelo (no batch) | Un modelo por sesión de importación |
 | Punto de entrada en Home | Tercer botón "Iniciar Ficha Prophet" | Sin selector de template; directo al flujo Prophet |
 | Experiencia de edición | Página completa por sección (no modal) | Tablas de 30+ runs necesitan espacio |
-| LLM en import | No — openpyxl directo | Excel bien estructurado; sin costo ni latencia LLM |
+| LLM en import | Sí — openpyxl lee crudo + Haiku mapea columnas al schema | El Excel real puede tener headers distintos, celdas mal ubicadas o formatos inconsistentes; Haiku absorbe esa variabilidad |
 | Modelo de datos | Reusar `Documento` con `tipo="prophet"` | Sin cambio de schema SQLite; reusa todo el stack |
 | Multi-user | `user_id="default"` igual que MVP | Limitación documentada; Fase 1 agrega auth si necesario |
 
@@ -91,40 +91,45 @@ Infrastructure
 
 ## Flujo de importación del Excel
 
+El import usa **dos capas**: `openpyxl` lee el Excel crudo (sin asumir estructura exacta), y **Haiku** interpreta ese contenido y lo mapea al schema esperado por sección. Esto absorbe variabilidad real: headers con nombres ligeramente distintos, columnas en orden diferente, hojas renombradas, celdas con formatos inconsistentes.
+
 ```
 crear_prophet.py
-  1. Usuario sube Registro_Modelos_*.xlsx
+  1. Usuario sube cualquier .xlsx (no se asume formato exacto)
   2. DetectarModelosProphet.ejecutar(xlsx_bytes)
-       └─ Lee hoja Descripcion_General
+       └─ openpyxl lee nombres de hojas + primeras filas de cada una
+       └─ Haiku identifica cuál hoja contiene el catálogo de modelos
        └─ Devuelve list[tuple[int, str, str]]  # (fila_idx, nombre_modelo, encargado)
   3. UI muestra selectbox con los modelos detectados
   4. Usuario selecciona modelo → click "Importar"
   5. ImportarRegistroProphet.ejecutar(xlsx_bytes, fila_idx)
-       ├─ Hoja Descripcion_General[fila_idx] → secciones 1, 2, 6 (parcial)
-       ├─ Hoja Detalle Runs (filtrado por corridas del modelo) → sección 4
-       ├─ Hoja Variables criticas (filtrado por corridas del modelo) → sección 5
-       └─ Hoja Conocimiento_Tecnico (completa) → sección 12
-       └─ Crea Documento(tipo="prophet", user_id="default") + Secciones
+       ├─ openpyxl extrae cada hoja como lista de dicts {header: valor}
+       ├─ Para cada sección destino, Haiku recibe:
+       │    datos crudos de la hoja + schema esperado (campos Prophet) +
+       │    instrucción: "extrae datos del modelo X, mapea al schema, devuelve JSON"
+       ├─ Si Haiku no puede extraer → sección queda vacía con advertencia visible
+       └─ Crea Documento(tipo="prophet", user_id="default") + Secciones pre-llenadas
        └─ Persiste en SQLite vía DocumentoRepository
-  6. Navega a dashboard del documento creado
+  6. Spinner con progreso por sección ("Importando corridas...", "Importando variables...")
+  7. Navega a dashboard con resumen: N secciones importadas, M vacías con motivo
 ```
 
-**Mapeo de hojas:**
+**Prompt dedicado:** `src/llm/prompts/extraer_seccion_prophet.py` — prompt con schema variable por tipo de sección. Instrucciones: no inventar datos, mapear best-effort, incluir campo `advertencias` para datos ambiguos o faltantes.
 
-| Hoja Excel | Columnas clave | → Secciones |
+**Modelo LLM:** Haiku (rápido y barato — costo estimado <$0.01 por import completo de un modelo).
+
+**Mapeo orientativo de hojas a secciones** (el prompt se adapta si los nombres difieren):
+
+| Hoja típica | Datos que contiene | Secciones |
 |---|---|---|
-| `Descripcion_General` | Area, Proceso, Encargado, Corridas, Descripcion, Variables involucradas, Supuestos que se actualizan, Frecuencia, Insumo, Área encargada, Tiempo de ejecución, Qué problema ataca | 1, 2, 6 (parcial) |
-| `Detalle Runs` | # corrida, Detalle, Corrida Precedente, Es ALM?, Tiempo de ejecución, Outputs Principales, Variables críticas, Responsable | 4 |
-| `Variables criticas` | Corrida, Nombre, Descripción, Fórmula, Frecuencia de actualización, Responsable de la info, Variables dependientes | 5 |
-| `Conocimiento_Tecnico` | Persona × 18 capacidades × nivel | 12 |
+| `Descripcion_General` | Una fila por modelo: descripción, encargado, frecuencia, corridas, problema que ataca | 1, 2, 6 (parcial) |
+| `Detalle Runs` | Una fila por corrida: número, descripción, ¿ALM?, tiempo, outputs, precedente, responsable | 4 |
+| `Variables criticas` | Una fila por variable: nombre, fórmula, corrida, frecuencia, responsable, dependencias | 5 |
+| `Conocimiento_Tecnico` | Matriz personas × capacidades × nivel | 12 |
 
 **Secciones vacías tras import** (el dueño las llena en app): `supuestos` (7), `outputs_reportes` (8), `componentes_librerias` (9), `historial_cambios` (10), `limitaciones_riesgos` (11).
 
-**Tolerancia a errores:** columna o hoja faltante → sección queda `completitud="vacia"` con mensaje descriptivo. El import nunca lanza excepción al usuario — degrada graciosamente.
-
-**Validación de headers:** `ImportarRegistroProphet` valida los nombres de columna esperados al abrir cada hoja. Si hay discrepancia, registra advertencia en el resultado (no excepción) y muestra al usuario: *"La columna 'Responsable' no encontrada en 'Detalle Runs' — esa sección quedará parcial."*
-
----
+**Degradación graciosamente:** si Haiku no puede extraer una sección, queda `completitud="vacia"` con advertencia accionable: *"No se encontró información de corridas en el Excel — puedes completar esa sección manualmente."* El import nunca lanza excepción al usuario.
 
 ## Experiencia de edición (formularios)
 
@@ -209,7 +214,7 @@ El template Excel incluye: nombres de hojas exactos, headers con formato visual,
 - `src/ui/pages/crear_prophet.py`
 - `src/ui/pages/editar_seccion_prophet.py`
 - `src/docs/templates/prophet_model_doc_smnyl.docx`
-- `src/llm/prompts/prophet_gaps.py` (stub vacío — Fase 1)
+- `src/llm/prompts/extraer_seccion_prophet.py` (prompt Haiku para mapeo Excel → schema Prophet)
 - `docs/Modulo Prophet MA/Registro_Modelos_Template.xlsx`
 - `docs/Modulo Prophet MA/Guia_Llenado_Registro.md`
 - `tests/unit/test_template_catalog_prophet.py`
@@ -249,3 +254,9 @@ El template Excel incluye: nombres de hojas exactos, headers con formato visual,
 | Skills Matrix (18 columnas) demasiado ancha para el DOCX | Font 7pt + columnas angostas, igual que tablas densas del writer MRM |
 | Sobre-ingeniería de Fase 1 sin validar Fase 0 | No construir Fase 1 sin feedback positivo de la demo con MA |
 | Información sensible (fórmulas de modelos productivos) commiteada al repo | Validar con MA qué puede ir a GitHub; datos reales en `.gitignore` si necesario |
+
+---
+
+## Notas de implementación
+
+**Uso de Codex:** la implementación de esta Fase 0 usa el plugin Codex de Claude Code para acelerar la generación de código en tareas bien definidas (use cases, tests, template catalog). Claude Code coordina el diseño y la integración; Codex ejecuta las piezas más mecánicas.
