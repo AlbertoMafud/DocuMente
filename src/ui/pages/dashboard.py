@@ -411,7 +411,41 @@ def _render_gobernanza(documento: Documento) -> None:
         with col_export:
             bytes_key = f"docx_bytes_{doc_id_str}"
             nombre_key = f"docx_nombre_{doc_id_str}"
-            if bytes_key in st.session_state:
+            if documento.tipo == "prophet":
+                if bytes_key in st.session_state:
+                    st.download_button(
+                        "Descargar Ficha Prophet",
+                        data=st.session_state[bytes_key],
+                        file_name=st.session_state[nombre_key],
+                        mime=_DOCX_MIME,
+                        type="primary",
+                        use_container_width=True,
+                        key=f"download_prophet_{doc_id_str}",
+                        on_click=lambda: (
+                            st.session_state.pop(bytes_key, None),
+                            st.session_state.pop(nombre_key, None),
+                        ),
+                    )
+                else:
+                    if st.button(
+                        "Exportar Ficha Prophet",
+                        use_container_width=True,
+                        key=f"export_prophet_{doc_id_str}",
+                        help="Genera la Ficha Prophet en formato .docx.",
+                    ):
+                        from src.core.usecases import DocxWriterProphet
+                        try:
+                            with st.spinner("Generando Ficha Prophet..."):
+                                docx_bytes = DocxWriterProphet().render(documento)
+                            nombre_archivo = f"Ficha_Prophet_{documento.metadata_modelo.nombre_modelo.replace(' ', '_')}.docx"
+                            st.session_state[bytes_key] = docx_bytes
+                            st.session_state[nombre_key] = nombre_archivo
+                            st.rerun()
+                        except FileNotFoundError as e:
+                            st.warning(str(e))
+                        except Exception as e:
+                            st.error(f"Error al exportar: {e}")
+            elif bytes_key in st.session_state:
                 st.download_button(
                     "Descargar DOCX",
                     data=st.session_state[bytes_key],
