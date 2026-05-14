@@ -18,11 +18,12 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from src.core.models.apendice import Apendice
 from src.core.models.auditoria import EventoAuditoria
+from src.core.models.fuente_contexto import FuenteContexto
 from src.core.models.memoria import MemoriaModelo
 from src.core.models.metricas import MetricasUso
 from src.core.models.seccion import Seccion
 
-TipoDocumento = Literal["model_development"]
+TipoDocumento = Literal["model_development", "prophet"]
 EstadoDocumento = Literal["draft", "in_review", "approved", "published", "retired"]
 TierRiesgo = Literal[
     "low",
@@ -88,6 +89,14 @@ class Documento(BaseModel):
     memoria_modelo: MemoriaModelo = Field(default_factory=MemoriaModelo)
     apendices: list[Apendice] = Field(default_factory=list)
     metricas_uso: MetricasUso = Field(default_factory=MetricasUso)
+    fuentes_contexto: list[FuenteContexto] = Field(
+        default_factory=list,
+        description=(
+            "Archivos adicionales (PDF, XLSX, TXT, DOCX secundarios) cuyo texto "
+            "alimenta el SugerenciasMultiFuente. Opcional, default vacío para "
+            "backward-compatibility con documentos persistidos previos."
+        ),
+    )
 
     def seccion_por_id(self, seccion_id: str) -> Seccion | None:
         """Devuelve la sección por su ID o None."""
