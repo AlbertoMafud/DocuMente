@@ -14,8 +14,11 @@ from src.storage.repositories import DocumentoRepository
 from src.ui.components import header
 from src.ui.pages import (
     auditoria,
+    brief_inicial,
     crear_nuevo,
+    crear_prophet,
     dashboard,
+    editar_seccion_prophet,
     entrevista,
     importar,
     onboarding,
@@ -53,7 +56,7 @@ def _render_home() -> None:
         unsafe_allow_html=True,
     )
 
-    col_a, col_b, _ = st.columns([1, 1, 2])
+    col_a, col_b, col_c, _ = st.columns([1, 1, 1, 1])
     with col_a:
         if st.button(
             "Crear nuevo documento",
@@ -66,6 +69,14 @@ def _render_home() -> None:
     with col_b:
         if st.button("Mejorar documento existente", use_container_width=True):
             st.session_state["pagina"] = "importar"
+            st.rerun()
+    with col_c:
+        if st.button(
+            "Iniciar Ficha Prophet",
+            use_container_width=True,
+            help="Importa el registro Excel de Modelos Actuariales y genera la ficha técnica.",
+        ):
+            st.session_state["pagina"] = "crear_prophet"
             st.rerun()
 
     st.markdown("<div style='height: 3rem;'></div>", unsafe_allow_html=True)
@@ -134,10 +145,16 @@ def main() -> None:
         entrevista.render()
     elif pagina == "onboarding":
         onboarding.render()
+    elif pagina == "brief_inicial":
+        brief_inicial.render()
     elif pagina == "vista_previa":
         vista_previa.render()
     elif pagina == "auditoria":
         auditoria.render()
+    elif pagina == "crear_prophet":
+        crear_prophet.render()
+    elif pagina == "editar_seccion_prophet":
+        editar_seccion_prophet.render()
     else:
         st.error(f"Página desconocida: {pagina}")
         st.session_state["pagina"] = "home"
