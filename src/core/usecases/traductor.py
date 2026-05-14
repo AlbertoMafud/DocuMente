@@ -22,6 +22,10 @@ from typing import Final, Literal
 from anthropic.types import MessageParam, TextBlockParam
 
 from src.core.models import Documento
+from src.core.usecases.strings_localizados import (
+    MOTIVOS_PREDEFINIDOS_ES,
+    traducir_motivo_predefinido,
+)
 from src.llm import LLMClient
 from src.llm.pricing import construir_llamada
 
@@ -86,6 +90,14 @@ class TraductorDocumento:
 
         for seccion in documento.secciones:
             if seccion.completitud == "omitida":
+                # El motivo se rendereará como "Sección omitida — <motivo>" por
+                # el writer. Necesitamos que el motivo quede en el idioma destino,
+                # incluso para secciones omitidas (de lo contrario el .docx en
+                # inglés tendrá frases en español dentro del bloque).
+                if seccion.motivo_omision:
+                    seccion.motivo_omision = self._traducir_motivo(
+                        documento, seccion.motivo_omision, idioma_objetivo
+                    )
                 continue
             if seccion.contenido and seccion.contenido.strip():
                 seccion.contenido = self._traducir_texto(documento, seccion.contenido)
@@ -99,6 +111,34 @@ class TraductorDocumento:
                     apendice.titulo = self._traducir_texto(documento, apendice.titulo)
 
         return documento
+
+    def _traducir_motivo(self, documento: Documento, motivo: str, idioma_objetivo: Idioma) -> str:
+        """Traduce el motivo de omisión.
+
+        Si el motivo es uno de los 4 predefinidos en `MOTIVOS_PREDEFINIDOS_ES`,
+        usa el swap directo de `strings_localizados` (sin LLM).
+
+        Si tiene la forma `"<predefinido> — <comentario>"`, separa: swap del
+        predefinido + LLM del comentario.
+
+        Si es texto libre, traduce todo el motivo vía LLM.
+        """
+        # Caso A: predefinido puro.
+        directo = traducir_motivo_predefinido(motivo, idioma_objetivo)
+        if directo is not None and directo != motivo:
+            return directo
+
+        # Caso B: predefinido + comentario libre (separador " — ").
+        for predefinido in MOTIVOS_PREDEFINIDOS_ES:
+            prefijo = f"{predefinido} — "
+            if motivo.startswith(prefijo):
+                comentario = motivo[len(prefijo) :]
+                comentario_traducido = self._traducir_texto(documento, comentario)
+                pred_traducido = traducir_motivo_predefinido(predefinido, idioma_objetivo)
+                return f"{pred_traducido} — {comentario_traducido}"
+
+        # Caso C: texto libre.
+        return self._traducir_texto(documento, motivo)
 
     def _traducir_texto(self, documento: Documento, texto: str) -> str:
         """Una llamada LLM por bloque de texto. Tolerante a errores."""

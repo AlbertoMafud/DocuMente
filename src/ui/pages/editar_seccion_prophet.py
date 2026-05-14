@@ -52,10 +52,10 @@ def render() -> None:
     header.render(breadcrumbs=["Inicio", doc.metadata_modelo.nombre_modelo, seccion.nombre])
 
     st.markdown(
-        f"""<h1 style="font-family: var(--font-display); color: {SMNYL_COLORS['text']}; margin-bottom: 0.25rem;">
+        f"""<h1 style="font-family: var(--font-display); color: {SMNYL_COLORS["text"]}; margin-bottom: 0.25rem;">
             {seccion.nombre}
         </h1>
-        <p style="color: {SMNYL_COLORS['text_muted']}; margin-bottom: 1.5rem;">{cat.intencion}</p>""",
+        <p style="color: {SMNYL_COLORS["text_muted"]}; margin-bottom: 1.5rem;">{cat.intencion}</p>""",
         unsafe_allow_html=True,
     )
 
@@ -70,16 +70,21 @@ def render() -> None:
 
     col_guardar, col_volver, _ = st.columns([1, 1, 3])
     with col_guardar:
-        if st.button("Guardar cambios", type="primary", use_container_width=True) and nuevo_contenido is not None:
+        if (
+            st.button("Guardar cambios", type="primary", use_container_width=True)
+            and nuevo_contenido is not None
+        ):
             seccion.contenido = nuevo_contenido
             seccion.completitud = "completa"
-            doc.registrar_evento(EventoAuditoria(
-                timestamp=datetime.now(UTC),
-                actor="default",
-                tipo="seccion_editada",
-                descripcion=f"Sección '{seccion.nombre}' actualizada (Prophet)",
-                seccion_id=seccion_id,
-            ))
+            doc.registrar_evento(
+                EventoAuditoria(
+                    timestamp=datetime.now(UTC),
+                    actor="default",
+                    tipo="seccion_editada",
+                    descripcion=f"Sección '{seccion.nombre}' actualizada (Prophet)",
+                    seccion_id=seccion_id,
+                )
+            )
             repo.guardar(doc)
             st.success("Cambios guardados.")
             st.session_state["pagina"] = "dashboard"
@@ -153,4 +158,7 @@ def _editor_campos(seccion, cat: SeccionCatalogoProphet) -> str:
             key=f"campo_{seccion.id}_{col}",
         )
 
-    return json.dumps({"contenido": json.dumps(resultado, ensure_ascii=False), "advertencias": []}, ensure_ascii=False)
+    return json.dumps(
+        {"contenido": json.dumps(resultado, ensure_ascii=False), "advertencias": []},
+        ensure_ascii=False,
+    )

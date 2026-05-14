@@ -11,6 +11,7 @@ from src.core.models.documento import (
     TipoDocumento,
 )
 from src.core.models.entrevista import EstadoEntrevista, MensajeEntrevista, RolMensaje
+from src.core.models.fuente_contexto import FuenteContexto, TipoFuente
 from src.core.models.memoria import MemoriaModelo
 from src.core.models.metricas import LlamadaLLM, MetricasUso
 from src.core.models.seccion import Completitud, Seccion
@@ -23,6 +24,7 @@ __all__ = [
     "EstadoDocumento",
     "EstadoEntrevista",
     "EventoAuditoria",
+    "FuenteContexto",
     "LlamadaLLM",
     "MemoriaModelo",
     "MensajeEntrevista",
@@ -36,4 +38,5 @@ __all__ = [
     "TipoBrecha",
     "TipoDocumento",
     "TipoEvento",
+    "TipoFuente",
 ]

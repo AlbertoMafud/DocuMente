@@ -102,9 +102,11 @@ def test_traducir_es_devuelve_documento_sin_modificar() -> None:
     assert len(llm.llamadas) == 0
 
 
-def test_traducir_preserva_secciones_omitidas() -> None:
-    """Una sección omitida no se traduce; mantiene completitud='omitida' y motivo."""
-    llm = FakeLLM(["No llamar"] * 5)
+def test_traducir_seccion_omitida_con_motivo_predefinido_no_llama_llm() -> None:
+    """Motivo predefinido en español ('No aplica al modelo') se traduce por
+    swap directo (no llama LLM) a 'Not applicable to the model'.
+    """
+    llm = FakeLLM(["No deberia llamarse"] * 5)
     doc = Documento(
         metadata_modelo=MetadataModelo(nombre_modelo="X"),
         secciones=[
@@ -115,7 +117,7 @@ def test_traducir_preserva_secciones_omitidas() -> None:
                 obligatoria=True,
                 contenido=None,
                 completitud="omitida",
-                motivo_omision="No aplica",
+                motivo_omision="No aplica al modelo",
             )
         ],
     )
@@ -124,7 +126,81 @@ def test_traducir_preserva_secciones_omitidas() -> None:
     s = traducido.seccion_por_id("s1")
     assert s is not None
     assert s.completitud == "omitida"
-    assert s.motivo_omision == "No aplica"
+    assert s.motivo_omision == "Not applicable to the model"
+    assert len(llm.llamadas) == 0
+
+
+def test_traducir_seccion_omitida_con_motivo_libre_llama_llm() -> None:
+    """Motivo de texto libre (de 'Otro especificar') pasa por LLM."""
+    llm = FakeLLM(["Free-text reason translated to English"])
+    doc = Documento(
+        metadata_modelo=MetadataModelo(nombre_modelo="X"),
+        secciones=[
+            Seccion(
+                id="s1",
+                nombre="X",
+                numero="1",
+                obligatoria=True,
+                contenido=None,
+                completitud="omitida",
+                motivo_omision="Razón de texto libre que el usuario tipeó",
+            )
+        ],
+    )
+    traducido = TraductorDocumento(llm).traducir(doc, idioma_objetivo="en")
+
+    s = traducido.seccion_por_id("s1")
+    assert s is not None
+    assert s.motivo_omision == "Free-text reason translated to English"
+    assert len(llm.llamadas) == 1
+
+
+def test_traducir_motivo_predefinido_con_comentario_separa_y_traduce() -> None:
+    """Motivo con la forma '<predefinido> — <comentario>': swap del predefinido
+    + LLM solo para el comentario libre.
+    """
+    llm = FakeLLM(["the model does not use ESG"])
+    doc = Documento(
+        metadata_modelo=MetadataModelo(nombre_modelo="X"),
+        secciones=[
+            Seccion(
+                id="s1",
+                nombre="X",
+                numero="1",
+                obligatoria=True,
+                contenido=None,
+                completitud="omitida",
+                motivo_omision="No aplica al modelo — el modelo no usa ESG",
+            )
+        ],
+    )
+    traducido = TraductorDocumento(llm).traducir(doc, idioma_objetivo="en")
+
+    s = traducido.seccion_por_id("s1")
+    assert s is not None
+    assert s.motivo_omision == "Not applicable to the model — the model does not use ESG"
+    assert len(llm.llamadas) == 1  # solo el comentario
+
+
+def test_traducir_seccion_omitida_sin_motivo_no_llama_llm() -> None:
+    """Sección omitida sin motivo no debe llamar LLM ni romper."""
+    llm = FakeLLM(["nunca"] * 3)
+    doc = Documento(
+        metadata_modelo=MetadataModelo(nombre_modelo="X"),
+        secciones=[
+            Seccion(
+                id="s1",
+                nombre="X",
+                numero="1",
+                obligatoria=True,
+                contenido=None,
+                completitud="omitida",
+                motivo_omision=None,
+            )
+        ],
+    )
+    TraductorDocumento(llm).traducir(doc, idioma_objetivo="en")
+    assert len(llm.llamadas) == 0
 
 
 def test_traducir_tarea_correcta_chat_no_drafting() -> None:

@@ -18,6 +18,8 @@ dependencies = [
     "python-docx>=1.1.2",
     "docxtpl>=0.18.0",
     "Jinja2>=3.1.4",
+    "pypdf>=4.3.0",
+    "openpyxl>=3.1.0",
 
     # Datos y validación
     "pydantic>=2.7.0",

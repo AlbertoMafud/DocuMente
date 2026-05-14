@@ -27,7 +27,13 @@ class ResultadoDeteccion:
     advertencias: list[str] = field(default_factory=list)
 
 
-_NOMBRES_HOJA_CATALOGO = {"descripcion_general", "descripción_general", "modelos", "catalogo", "catálogo"}
+_NOMBRES_HOJA_CATALOGO = {
+    "descripcion_general",
+    "descripción_general",
+    "modelos",
+    "catalogo",
+    "catálogo",
+}
 _COLS_NOMBRE = {"proceso", "modelo", "nombre", "nombre_modelo", "nombre del modelo"}
 _COLS_ENCARGADO = {"encargado", "responsable", "dueño", "owner", "dueño del modelo"}
 _COLS_AREA = {"area", "área"}
@@ -82,12 +88,14 @@ class DetectarModelosProphet:
         for idx, row in enumerate(rows):
             nombre = (row.get(col_n, "") if col_n else next(iter(row.values()), "")).strip()
             if nombre:
-                modelos.append(ModeloProphetInfo(
-                    fila_idx=idx,
-                    nombre=nombre,
-                    encargado=(row.get(col_e, "") if col_e else "").strip(),
-                    area=(row.get(col_a, "") if col_a else "").strip(),
-                ))
+                modelos.append(
+                    ModeloProphetInfo(
+                        fila_idx=idx,
+                        nombre=nombre,
+                        encargado=(row.get(col_e, "") if col_e else "").strip(),
+                        area=(row.get(col_a, "") if col_a else "").strip(),
+                    )
+                )
         advertencias = [] if modelos else ["No se encontraron filas de modelos."]
         return ResultadoDeteccion(modelos=modelos, advertencias=advertencias)
 
@@ -109,10 +117,13 @@ class DetectarModelosProphet:
             data = json.loads(resp.text)
             modelos = [
                 ModeloProphetInfo(
-                    fila_idx=m["fila_idx"], nombre=m.get("nombre", ""),
-                    encargado=m.get("encargado", ""), area=m.get("area", ""),
+                    fila_idx=m["fila_idx"],
+                    nombre=m.get("nombre", ""),
+                    encargado=m.get("encargado", ""),
+                    area=m.get("area", ""),
                 )
-                for m in data.get("modelos", []) if m.get("nombre", "").strip()
+                for m in data.get("modelos", [])
+                if m.get("nombre", "").strip()
             ]
             return ResultadoDeteccion(modelos=modelos, advertencias=data.get("advertencias", []))
         except Exception as e:

@@ -79,7 +79,7 @@ class ExportarDocumento:
 
         extractor = TableExtractor(self.llm) if self.llm is not None else None
         writer = DocxWriter(table_extractor=extractor)
-        blob = writer.generar(documento, self.template_path)
+        blob = writer.generar(documento, self.template_path, idioma=idioma_objetivo)
         nombre = _sugerir_nombre(documento.metadata_modelo.nombre_modelo, idioma=idioma_objetivo)
 
         # Recargar el doc original para registrar el audit event sin contaminar

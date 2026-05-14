@@ -2,17 +2,17 @@
 
 > Estado vivo del proyecto. Se lee al iniciar sesión y se actualiza al cerrar si hubo cambios significativos.
 
-**Última actualización:** 2026-05-12 (sesión 9 — flujo "crear desde cero" + docs de soporte para Vidal + simulación E2E)
+**Última actualización:** 2026-05-12 (sesión 10 — v2.10 mejoras post-feedback + handoff a sesión Prophet)
 
 ---
 
 ## Estado actual
 
-**Fases 0-4 + Fase 3 + Fase 6 ✅ completas + feature "crear desde cero" ✅ (sesión 9).** Solo falta Fase 5 (pulido UX).
+**Fases 0-4 + Fase 3 + Fase 6 ✅ completas + features "crear desde cero" (S9) y v2.10 mejoras (S10) ✅.** Solo falta Fase 5 (pulido UX final).
 
-**MVP cerrado para piloto interno con dos puertas de entrada al flujo:** importar `.docx` existente Y crear desde cero. Repo GitHub `AlbertoMafud/DocuMente` actualizado al commit de merge `45748b4` (sesión 9, 7 commits adelante del cierre de sesión 8). 182 tests pasando, ruff/mypy clean en archivos nuevos.
+**MVP cerrado con mejoras incorporadas de feedback temprano de usuarios.** Repo GitHub `AlbertoMafud/DocuMente` en `45748b4` (último commit a `origin/main`). Working tree con cambios de sesión 10 sin commitear aún. **236 tests pasando** (de 182 baseline, +54), ruff/format clean, mypy sin nuevos errores en archivos modificados.
 
-**Próximo:** Alberto valida calidad del simulado E2E (`docs/E2E_TEST_SCENARIO.md`, checklist §7, ~60-90 min) → decide si ejecutar contra app real o pasar directo a stakeholders → reunión con Vidal (materiales `MIGRATION_TO_EC2.md` y `technical_architecture_for_data_architect.md` listos) → arrancar Fase A / hito M1 (containerización).
+**Próximo:** Alberto valida visualmente las 5 mejoras en la app local (multi-archivo, traducción EN completa, botón volver, apéndices reorganizados, brief inicial) → decisión de commitear y empujar a GitHub → seguir con plan original (reunión Vidal → M1 containerización → Fase 5 collateral) → arrancar **sesión dedicada del módulo Prophet (Fase 0)**.
 
 ---
 
@@ -303,3 +303,163 @@ Se completó el segundo punto de entrada al flujo de DocuMente. Antes solo se po
 - Bloqueos: ninguno técnico. Ahora todo está en manos de la validación y de las decisiones organizacionales (Compliance, Vidal).
 
 **Handoff a sesión 10:** Alberto tiene comentarios acumulados que va a traer a la próxima sesión. Leer este `status.md` + el `MEMORY.md` + el `next_session_handoff.md` antes de arrancar trabajo.
+
+---
+
+## Progreso de sesión 10 (2026-05-12)
+
+### Contexto
+Alberto trajo 6 comentarios resultado de pláticas preliminares con potenciales usuarios. Los puntos 1-5 son mejoras concretas al motor actual; el punto 6 es una solicitud distinta — un módulo especializado para Modelos Actuariales (Prophet) que requiere arquitectura propia. Alcance acordado: implementación completa de los 5 puntos + delineamiento básico de Prophet para sesión dedicada.
+
+Plan aprobado: `C:\Users\alber\.claude\plans\dime-en-qu-nos-rustling-stardust.md`.
+
+### Implementación de los 5 puntos
+
+**Punto 2 — Traducción EN sin fugas en español ✅**
+- Nuevo módulo `src/core/usecases/strings_localizados.py` con diccionario `STRINGS_UI` (ES/EN) + función `t(key, idioma)` para todas las cadenas hardcodeadas del writer y los 4 motivos predefinidos de omisión.
+- `docx_writer.py` ahora recibe `idioma` como parámetro y resuelve marcadores ("Sección omitida — ", "[Pendiente — sin contenido capturado]", "[Sección no presente en el catálogo]") vía `t()`.
+- `traductor.py` ya no salta secciones omitidas: traduce `motivo_omision` con swap directo (sin LLM) si es predefinido, o vía LLM si es texto libre. También maneja la forma híbrida `"<predefinido> — <comentario>"`.
+- `exportar_documento.py` propaga `idioma_objetivo` al writer.
+- **Tests:** +10 (test_strings_localizados.py) + 4 nuevos en test_traductor.py + 2 nuevos en test_docx_writer.py.
+
+**Punto 3 — Botón "Volver" desde Importar + auditoría de navegación ✅**
+- Componente reusable `src/ui/components/back_button.py` con factory de `key` automática.
+- Agregado a `importar.py` (que no tenía) y `onboarding.py` (que tampoco). Las demás pantallas ya tenían su patrón propio funcional.
+- **Tests:** +5 (test_back_button.py con mocks de `st.button` y `st.session_state`).
+
+**Punto 4 — Apéndices reorganizados + cross-refs + traducción ✅**
+- Reescritura del flujo en `docx_writer.py`: los apéndices YA NO se inyectan dentro del Subdoc de cada sección. Se acumulan y al final se agrega una sección dedicada **"Apéndices"** (o "Appendix" en EN) con headings nivel 1+2 y numeración `A.1`, `A.2`, ….
+- Implementación: después del `tpl.render()` de docxtpl, se reabre el .docx con `python-docx` y se agrega la sección con `_agregar_seccion_apendices`. Las tablas markdown se renderean como tablas nativas con bordes y font adaptable (reusando `_agregar_tabla_documento` análogo al de Subdoc).
+- Pre-procesamiento del body: regex `\(ver Apéndice|see Appendix:\s*<titulo>\)` → `(ver Apéndice A.N)` / `(see Appendix A.N)`, matching por título de apéndice. Fallback case-insensitive. Si no hay match, deja la referencia literal.
+- **Tests:** +5 nuevos en test_docx_writer.py (sección dedicada, cross-refs, EN, sin apéndices, referencia inexistente, tabla en apéndice).
+
+**Punto 1 — Multi-archivo (PDF, XLSX, TXT, DOCX como contexto) ✅**
+- Nuevo modelo `FuenteContexto` (`src/core/models/fuente_contexto.py`) — backward-compatible (`fuentes_contexto: list[FuenteContexto] = []` en `Documento`).
+- Paquete nuevo `src/docs/readers/` con:
+  - `pdf_reader.py` (usa `pypdf 6.10.2`, agregado a `pyproject.toml`).
+  - `xlsx_reader.py` (usa `openpyxl`, ahora en deps explícitas; truncado a 200 filas × 20 cols por hoja).
+  - `txt_reader.py` (stdlib, fallback UTF-8 → UTF-8-sig → latin-1).
+  - `docx_reader_simple.py` (DOCX como texto plano, NO compite con `DocxReader` ancla).
+  - Factory `extraer_texto(archivo, nombre) -> (tipo, str)` con detección por extensión.
+- Use case nuevo `SugerenciasMultiFuente` en `src/core/usecases/sugerencias_multifuente.py` — solo opera sobre secciones con `completitud=="vacia"`, llama a Sonnet con `SUGERENCIAS_MULTIFUENTE_SYSTEM` (prohíbe inventar, exige citar fuente al final), marca el contenido con `[Borrador automático — revisar]` y `completitud="parcial"`. Tolerante a errores LLM.
+- `ImportarDocumento` y `CrearDocumentoEnBlanco` aceptan `fuentes_adicionales` opcional. Si hay LLM configurado + fuentes, disparan `SugerenciasMultiFuente`.
+- UI: `importar.py` ahora muestra **dos secciones** (ancla + fuentes), `crear_nuevo.py` agrega uploader de fuentes opcional debajo del form. Ambos validan tipos por extensión y muestran lista de archivos antes de procesar. Spinner adaptable según cantidad de fuentes.
+- **Tests:** +15 (test_readers_multifuente.py para 4 readers + factory) + +7 (test_sugerencias_multifuente.py).
+
+**Punto 5 — Brief inicial opcional (10 preguntas de alto valor) ✅**
+- Use case `AplicarBrief` en `src/core/usecases/aplicar_brief.py` con `PREGUNTAS_BRIEF` (10 preguntas open-ended con `seccion_id` destino verificado contra el catálogo).
+  - Mapeo Q→sección: 1→1.3, 2→2.1, 3→2.2, 4→2.3, 5→4.2, 6→4.3, 7→4.4, 8→5.1, 9→7.4, 10→9.
+- Prompt en `src/llm/prompts/brief_a_seccion.py` — "no inventar", proporcional al input, sin headings, sin meta-comentarios.
+- Pantalla `src/ui/pages/brief_inicial.py` con 10 textareas + tip prominente + 2 botones ("Generar y continuar" / "Saltar").
+- Routing en `app.py` actualizado: nueva ruta `brief_inicial`. En `onboarding.py`, si el doc es nuevo (todas secciones vacías), redirige a `brief_inicial`; si viene de importar (ya tiene contenido), va directo a `dashboard`.
+- Backward-compat: el brief NO sobrescribe contenido existente (validado por test).
+- **Tests:** +7 en test_aplicar_brief.py (10 preguntas presentes, mapeo válido, no pisa contenido, idioma EN usa `[Draft — review]`, etc.).
+
+### Resumen de cambios
+
+**Nuevos archivos (13):**
+- `src/core/models/fuente_contexto.py`
+- `src/core/usecases/strings_localizados.py`
+- `src/core/usecases/sugerencias_multifuente.py`
+- `src/core/usecases/aplicar_brief.py`
+- `src/docs/readers/{__init__.py, pdf_reader.py, xlsx_reader.py, txt_reader.py, docx_reader_simple.py}`
+- `src/llm/prompts/{sugerencias_multifuente.py, brief_a_seccion.py}`
+- `src/ui/components/back_button.py`
+- `src/ui/pages/brief_inicial.py`
+
+**Archivos modificados (12):**
+- `src/core/models/{__init__.py, documento.py}` — agregar `FuenteContexto` y campo `fuentes_contexto` opcional.
+- `src/core/usecases/{docx_writer.py, traductor.py, exportar_documento.py, importar_documento.py, crear_documento.py}` — flujo apéndices reescrito, idioma propagado, multi-archivo orquestado.
+- `src/ui/pages/{importar.py, crear_nuevo.py, onboarding.py}` — multi-archivo en UI, routing a brief_inicial, back_button.
+- `src/ui/components/__init__.py` — export del back_button.
+- `app.py` — nueva ruta brief_inicial.
+- `pyproject.toml` — agregar `pypdf>=4.3.0`, `openpyxl>=3.1.0` a deps explícitas.
+
+**Nuevos tests (5 archivos, +54 tests):**
+- `test_strings_localizados.py` (10), `test_back_button.py` (5), `test_readers_multifuente.py` (8), `test_sugerencias_multifuente.py` (7), `test_aplicar_brief.py` (7).
+- Más extensiones a `test_traductor.py` (+4) y `test_docx_writer.py` (+13).
+
+### Calidad de código
+- **pytest:** 236/236 pasan (~25s).
+- **ruff check:** clean en src/ y tests/.
+- **ruff format:** aplicado (6 archivos reformateados durante el ciclo).
+- **mypy:** sin errores nuevos en archivos modificados. Los 5 errores reportados son pre-existentes (`storage/db.py`, `cambiar_estado.py`, `llm/client.py`, `interview_engine.py`, `drafter.py`).
+
+### Decisiones de diseño tomadas (todas registradas en el plan aprobado)
+1. Multi-archivo: docx ancla + N fuentes como contexto; no compiten por el rol estructural.
+2. Multi-archivo también en flujo "Crear desde cero" (simetría).
+3. Sección "Apéndices" se construye solo en render, NO se agrega al `template_catalog` (TEMPLATE_MODEL_DEVELOPMENT sigue siendo tupla congelada de 28).
+4. Numeración A.1, A.2 por orden de creación del apéndice (no por orden de mención en body).
+5. Brief inicial es OPCIONAL, preset fijo de 10 preguntas (no varía por tier).
+6. "Apéndice" → "Appendix" se resuelve dentro del punto 4 (cohesión con el rework del writer), no del punto 2.
+
+### Módulo Prophet — delineamiento básico para sesión propia
+
+**Approach decidido: C híbrido por fases.**
+
+**Fase Prophet-0 (1 semana, sesión dedicada próxima):**
+- Importar el Excel `Registro Modelos_envioAlberto.xlsx` directamente (usando openpyxl + Haiku con schema).
+- Generar borrador de ficha técnica con tablas pobladas (sin entrevista).
+- Segundo template `prophet_model_doc_smnyl.docx` con placeholders + 4 table loops (runs, variables, inputs, skills_matrix).
+- Selector de template en `crear_nuevo.py`: "MRM (Model Development)" vs "Ficha Prophet (Modelos Actuariales)".
+- Demo con Carmona, Cynthia, Magallanes — feedback de 1 hora.
+
+**Fase Prophet-1 (3-4 semanas, condicional a feedback positivo):**
+- Módulo registry-based completo con entidades Pydantic relacionales (`ModeloProphet`, `Run`, `Variable`, `Input`, `Dependencia`, `SkillAssessment`).
+- Schema SQLite con relaciones.
+- UI con formularios + autocompletado de cross-refs.
+- Vista de grafo navegable (opcional).
+- Audit trail por entidad.
+
+**4 preguntas abiertas para resolver al inicio de la sesión Prophet:**
+1. ¿Unidad de documentación = un modelo Prophet por archivo, o UN registro integral para toda Rentabilidad?
+2. ¿Dueños (Carmona/Cynthia/Magallanes) usan la app directamente, o alguien intermedio captura por ellos?
+3. ¿Qué prioridad organizacional tiene vs reunión Vidal + piloto MRM? ¿Hay deadline impuesto por MA?
+4. ¿Matriz de habilidades es parte del mismo entregable de documentación o es side-project de talento?
+
+### Lo que sigue inmediato (sesión 11)
+
+1. **Validación visual de Alberto** de las 5 mejoras en la app local (~30 min):
+   - Subir docx + 2-3 fuentes adicionales → ver borradores automáticos en secciones vacías + card "Fuentes de contexto" en dashboard.
+   - Exportar a EN → verificar que ya no aparece "Sección omitida", "Pendiente", "Apéndice" en español.
+   - Click "Volver" desde Importar y Onboarding → verificar que regresa a home.
+   - Doc con apéndices → exportar y verificar sección "Apéndices" al final con A.1, A.2 + cross-refs reemplazados.
+   - Crear documento nuevo → llegar a brief_inicial → llenar 5-6 preguntas → ver borradores en dashboard.
+2. **Si todo OK:** commit + push a `origin/main` (siete features atómicos sugeridos en el orden del plan).
+3. **Reunión con Vidal** sigue siendo el path hacia AWS — materiales de S8/S9 listos.
+4. **Sesión propia de Prophet (Fase 0).**
+
+### Bloqueos conocidos
+
+- **`ANTHROPIC_API_KEY`** sigue siendo precondición para usar sugerencias multi-fuente, brief inicial, traducción EN, drafter y extracción tabular. Sin key, esos flujos degradan elegantemente: el doc se crea/importa pero sin sugerencias automáticas.
+- **Carpeta huérfana del worktree** en `.claude/worktrees/cool-wing-eca24c` sigue cosmética (no afecta git).
+- **Pulido formal de plantilla `.docx`** sigue diferido para antes de demo externa.
+- **Bedrock vs Anthropic API directa** sigue pendiente de Compliance.
+
+---
+
+## Cierre sesión 10
+
+- **5/5 mejoras de feedback implementadas** sin regresiones — 236 tests pasando, lint clean.
+- **Multi-archivo** convierte DocuMente de "1 docx → mejora" a "1 docx ancla + N fuentes → sugerencias automáticas en secciones vacías", lo cual es exactamente lo que pidieron los usuarios potenciales.
+- **Traducción EN** ya queda íntegra: no más fugas en español en exports.
+- **Apéndices** quedan en sección dedicada al final con numeración A.N, cross-refs reemplazados, y traducción a "Appendix" en EN.
+- **Brief inicial** de 10 preguntas reduce drásticamente la fricción del onboarding: el usuario llega al dashboard con hasta 6 secciones ya con borrador.
+- **Navegación consistente** con back_button compartido.
+- **Prophet** queda con plan básico listo + 4 preguntas abiertas para su sesión propia. Esa sesión es independiente de la reunión con Vidal y del piloto MRM en curso.
+
+### Bloqueo al lanzar Streamlit detectado al cierre
+
+Al intentar `streamlit run app.py` se reveló que la variable de entorno `ANTHROPIC_API_KEY` está exportada **vacía** en el OS env de Windows (presente, len=0). Pydantic-settings prefiere OS env sobre `.env`, así que la cadena vacía sobrescribe la key real (válida, 108 chars) del archivo `.env`. La pantalla de entrevista crasheó al construir `AnthropicClient`.
+
+**Solución temporal usada:** lanzar con `unset ANTHROPIC_API_KEY` antes de `streamlit run` en bash. La app boota OK pero la app crasheó por un segundo motivo (exit code 4/107 sin trace claro — posible conflicto de puerto con instancia previa de Streamlit zombie en 8501).
+
+**Fix permanente a aplicar en sesión 11 (1 min):** desde una PowerShell normal del usuario, ejecutar `[Environment]::SetEnvironmentVariable("ANTHROPIC_API_KEY", $null, "User")` y reiniciar terminal. Eso elimina la variable vacía a nivel usuario. Después relanzar `streamlit run app.py` debería funcionar limpio.
+
+**Validación visual de las 5 mejoras quedó pendiente.** El checklist está en `pending_validation_items.md`.
+
+**Handoff a sesión 11:** dos opciones de scope (no excluyentes):
+1. **Quick win:** resolver fix de env var → validación visual local de las 5 mejoras (~30 min) → commit + push.
+2. **Foco Prophet:** sesión dedicada al módulo Prophet Fase 0. Contexto completo en `prophet_module_context.md` en el folder de memoria. Las 4 preguntas abiertas se resuelven al inicio.
+
+Alberto puede hacer (1) primero en una sesión corta y (2) en una sesión dedicada de 2-3 horas. O combinarlas.

@@ -83,9 +83,7 @@ class DocxWriterProphet:
                 campos = json.loads(raw) if isinstance(raw, str) else raw
                 ctx["area"] = campos.get("Area", campos.get("area", ""))
                 ctx["proceso"] = campos.get("Proceso", campos.get("proceso", ""))
-                ctx["encargado_principal"] = campos.get(
-                    "Encargado", campos.get("encargado", "")
-                )
+                ctx["encargado_principal"] = campos.get("Encargado", campos.get("encargado", ""))
                 ctx["frecuencia_uso"] = campos.get(
                     "Frecuencia de actualización", campos.get("frecuencia_uso", "")
                 )

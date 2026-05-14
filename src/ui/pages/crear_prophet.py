@@ -23,10 +23,10 @@ def render() -> None:
 
     st.markdown(
         f"""
-        <h1 style="font-family: var(--font-display); color: {SMNYL_COLORS['text']}; margin-bottom: 0.5rem;">
+        <h1 style="font-family: var(--font-display); color: {SMNYL_COLORS["text"]}; margin-bottom: 0.5rem;">
             Nueva Ficha Prophet
         </h1>
-        <p style="color: {SMNYL_COLORS['text_muted']}; margin-bottom: 2rem; max-width: 720px;">
+        <p style="color: {SMNYL_COLORS["text_muted"]}; margin-bottom: 2rem; max-width: 720px;">
             Sube el registro Excel de modelos actuariales. DocuMente detectará los modelos
             disponibles y generará la ficha pre-poblada con los datos del Excel.
         </p>
@@ -41,7 +41,9 @@ def render() -> None:
     )
 
     if archivo is None:
-        st.caption("¿No tienes el formato correcto? Descarga el template desde docs/Modulo Prophet MA/Registro_Modelos_Template.xlsx.")
+        st.caption(
+            "¿No tienes el formato correcto? Descarga el template desde docs/Modulo Prophet MA/Registro_Modelos_Template.xlsx."
+        )
         if st.button("Cancelar", use_container_width=False):
             st.session_state["pagina"] = "home"
             st.rerun()

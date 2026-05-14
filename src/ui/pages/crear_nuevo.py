@@ -8,16 +8,23 @@ Renderiza:
 
 from __future__ import annotations
 
+from io import BytesIO
+
 import streamlit as st
 
 from src.core.usecases import CrearDocumentoEnBlanco
+from src.llm import AnthropicClient
 from src.storage.repositories import DocumentoRepository
 from src.ui.components import header
 from src.ui.theme import SMNYL_COLORS
 
 
 def _construir_use_case() -> CrearDocumentoEnBlanco:
-    return CrearDocumentoEnBlanco(repo=DocumentoRepository())
+    try:
+        llm: AnthropicClient | None = AnthropicClient()
+    except Exception:
+        llm = None
+    return CrearDocumentoEnBlanco(repo=DocumentoRepository(), llm=llm)
 
 
 def render() -> None:
@@ -52,6 +59,20 @@ def render() -> None:
         )
         st.caption("Ambos campos son obligatorios. Podrás ajustar el resto en el onboarding.")
 
+        st.markdown("### Fuentes adicionales (opcional)")
+        st.caption(
+            "Si tienes material existente del modelo — procedimientos, hojas de "
+            "cálculo, notas técnicas — DocuMente lo leerá y sugerirá contenido "
+            "para las secciones vacías. Formatos: PDF, XLSX, TXT, DOCX."
+        )
+        fuentes_subidas = st.file_uploader(
+            "Adjunta fuentes (opcional)",
+            type=["pdf", "xlsx", "xlsm", "txt", "docx"],
+            accept_multiple_files=True,
+            label_visibility="collapsed",
+            key="crear_nuevo_fuentes",
+        )
+
         col_a, col_b, _ = st.columns([1, 1, 2])
         with col_a:
             submit = st.form_submit_button(
@@ -69,9 +90,22 @@ def render() -> None:
             st.error("Completa nombre del modelo y model ID antes de continuar.")
             return
 
+        fuentes_payload: list[tuple[BytesIO, str]] = []
+        if fuentes_subidas:
+            for f in fuentes_subidas:
+                fuentes_payload.append((BytesIO(f.getvalue()), f.name))
+
         uc = _construir_use_case()
         try:
-            doc = uc.ejecutar(nombre_modelo=nombre, model_id=model_id)
+            with st.spinner(
+                "Creando documento"
+                + (f" y procesando {len(fuentes_payload)} fuente(s)…" if fuentes_payload else "…")
+            ):
+                doc = uc.ejecutar(
+                    nombre_modelo=nombre,
+                    model_id=model_id,
+                    fuentes_adicionales=fuentes_payload or None,
+                )
         except ValueError as e:
             st.error(f"No se pudo crear el documento: {e}")
             return

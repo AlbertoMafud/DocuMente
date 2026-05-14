@@ -229,8 +229,11 @@ def test_writer_apendice_con_tabla_genera_tabla_nativa() -> None:
     assert "|---|---|" not in texto
 
 
-def test_writer_renderiza_apendices_vinculados_a_seccion() -> None:
-    """Apéndices con seccion_origen_id deben aparecer al final del contenido de esa sección."""
+def test_writer_renderiza_apendices_en_seccion_dedicada_al_final() -> None:
+    """Los apéndices se acumulan al final del documento en una sección 'Apéndices',
+    numerados A.1, A.2…. Ya NO se inyectan dentro del contenido de la sección
+    que los referencia.
+    """
     from src.core.models import Apendice
 
     doc = Documento(
@@ -259,8 +262,241 @@ def test_writer_renderiza_apendices_vinculados_a_seccion() -> None:
     texto = _texto_plano(blob)
 
     assert "Resumen narrativo de los supuestos" in texto
-    assert "Apéndice: Tabla de mortalidad SOA 2017" in texto
+    # Sección dedicada "Apéndices" al final, con heading
+    assert "Apéndices" in texto
+    # Cada apéndice se numera A.N: <titulo>
+    assert "A.1: Tabla de mortalidad SOA 2017" in texto
     assert "Tabla con factores por edad y sexo" in texto
+
+
+def test_writer_cross_reference_de_apendice_se_reemplaza_por_etiqueta_numerica() -> None:
+    """`(ver Apéndice: <titulo>)` en el body → `(ver Apéndice A.N)`."""
+    from src.core.models import Apendice
+
+    doc = Documento(
+        metadata_modelo=MetadataModelo(nombre_modelo="X"),
+        secciones=[
+            Seccion(
+                id="4.4.assumptions",
+                nombre="Key Assumptions",
+                numero="4.4",
+                obligatoria=True,
+                contenido="Los factores se detallan (ver Apéndice: Tabla de mortalidad).",
+                completitud="completa",
+            ),
+        ],
+        apendices=[
+            Apendice(
+                seccion_origen_id="4.4.assumptions",
+                titulo="Tabla de mortalidad",
+                contenido_md="Datos por edad.",
+            )
+        ],
+    )
+
+    writer = DocxWriter()
+    blob = writer.generar(doc, TEMPLATE_PATH)
+    texto = _texto_plano(blob)
+
+    assert "(ver Apéndice A.1)" in texto
+    # El título original ya NO debe aparecer en la referencia inline
+    assert "(ver Apéndice: Tabla de mortalidad)" not in texto
+
+
+def test_writer_apendices_en_idioma_en_usa_appendix_y_see_appendix() -> None:
+    """En inglés: sección 'Appendix' + cross-refs como '(see Appendix A.1)'."""
+    from src.core.models import Apendice
+
+    doc = Documento(
+        metadata_modelo=MetadataModelo(nombre_modelo="X"),
+        secciones=[
+            Seccion(
+                id="4.4.assumptions",
+                nombre="Key Assumptions",
+                numero="4.4",
+                obligatoria=True,
+                contenido="Factors are detailed (see Appendix: Mortality Table).",
+                completitud="completa",
+            ),
+        ],
+        apendices=[
+            Apendice(
+                seccion_origen_id="4.4.assumptions",
+                titulo="Mortality Table",
+                contenido_md="Data by age and sex.",
+            )
+        ],
+    )
+
+    writer = DocxWriter()
+    blob = writer.generar(doc, TEMPLATE_PATH, idioma="en")
+    texto = _texto_plano(blob)
+
+    # Heading de sección en inglés
+    assert "Appendix" in texto
+    assert "Apéndices" not in texto  # no contamination
+    # Cross-ref en inglés
+    assert "(see Appendix A.1)" in texto
+    assert "(see Appendix: Mortality Table)" not in texto
+    # Numeración
+    assert "A.1: Mortality Table" in texto
+
+
+def test_writer_sin_apendices_no_agrega_seccion_apendices() -> None:
+    """Doc sin apéndices → no aparece la palabra 'Apéndices' como heading."""
+    doc = Documento(
+        metadata_modelo=MetadataModelo(nombre_modelo="X"),
+        secciones=[
+            Seccion(
+                id="2.1.model_uses",
+                nombre="Model Uses",
+                numero="2.1",
+                obligatoria=True,
+                contenido="Contenido cualquiera.",
+                completitud="completa",
+            ),
+        ],
+        apendices=[],
+    )
+
+    writer = DocxWriter()
+    blob = writer.generar(doc, TEMPLATE_PATH)
+    texto = _texto_plano(blob)
+
+    # No debe aparecer ni "Apéndices" como heading ni "A.1:" como item
+    assert "A.1:" not in texto
+
+
+def test_writer_referencia_a_apendice_inexistente_se_deja_tal_cual() -> None:
+    """Si el body referencia un apéndice por título y no existe → no romper."""
+    doc = Documento(
+        metadata_modelo=MetadataModelo(nombre_modelo="X"),
+        secciones=[
+            Seccion(
+                id="2.1.model_uses",
+                nombre="Model Uses",
+                numero="2.1",
+                obligatoria=True,
+                contenido="Detalles (ver Apéndice: Tabla X que no existe).",
+                completitud="completa",
+            ),
+        ],
+        apendices=[],
+    )
+
+    writer = DocxWriter()
+    blob = writer.generar(doc, TEMPLATE_PATH)
+    texto = _texto_plano(blob)
+
+    # Sin apéndice que matchee, la referencia queda literal
+    assert "(ver Apéndice: Tabla X que no existe)" in texto
+
+
+def test_writer_apendice_con_tabla_markdown_se_renderea_como_tabla_nativa_en_seccion_dedicada() -> (
+    None
+):
+    """Apéndices con tablas markdown se renderean como tablas nativas dentro
+    de la sección dedicada al final (no embebidas en la sección de origen).
+    """
+    from src.core.models import Apendice
+
+    doc = Documento(
+        metadata_modelo=MetadataModelo(nombre_modelo="X"),
+        secciones=[
+            Seccion(
+                id="4.4.assumptions",
+                nombre="Key Assumptions",
+                numero="4.4",
+                obligatoria=True,
+                contenido="Resumen de supuestos.",
+                completitud="completa",
+            ),
+        ],
+        apendices=[
+            Apendice(
+                seccion_origen_id="4.4.assumptions",
+                titulo="Tabla de factores",
+                contenido_md=(
+                    "Datos extraídos.\n\n"
+                    "| Producto | Factor |\n"
+                    "|---|---|\n"
+                    "| 1.0 | 0.158 |\n"
+                    "| 2.0 | 0.383 |"
+                ),
+            )
+        ],
+    )
+
+    writer = DocxWriter()
+    blob = writer.generar(doc, TEMPLATE_PATH)
+    texto = _texto_plano(blob)
+
+    assert "Producto" in texto
+    assert "0.158" in texto
+    # Pipes ya NO deben quedar literales
+    assert "| Producto |" not in texto
+
+
+def test_writer_marcadores_en_idioma_en() -> None:
+    """Con idioma='en', los marcadores hardcodeados salen en inglés."""
+    doc = Documento(
+        metadata_modelo=MetadataModelo(nombre_modelo="X"),
+        secciones=[
+            Seccion(
+                id="2.1.model_uses",
+                nombre="Model Uses",
+                numero="2.1",
+                obligatoria=True,
+                contenido=None,
+                completitud="omitida",
+                motivo_omision="Not applicable to the model",
+            ),
+            Seccion(
+                id="2.2.model_scope",
+                nombre="Model Scope",
+                numero="2.2",
+                obligatoria=True,
+                contenido=None,
+                completitud="vacia",
+            ),
+        ],
+    )
+
+    writer = DocxWriter()
+    blob = writer.generar(doc, TEMPLATE_PATH, idioma="en")
+    texto = _texto_plano(blob)
+
+    # Marcador "Section omitted" en lugar de "Sección omitida"
+    assert "Section omitted" in texto
+    assert "Sección omitida" not in texto
+    # Marcador "Pending" en lugar de "Pendiente"
+    assert "[Pending — no content captured]" in texto
+    assert "[Pendiente — sin contenido capturado]" not in texto
+
+
+def test_writer_marcadores_en_idioma_es_por_default() -> None:
+    """Sin idioma explícito, el writer renderea en español (backward compat)."""
+    doc = Documento(
+        metadata_modelo=MetadataModelo(nombre_modelo="X"),
+        secciones=[
+            Seccion(
+                id="2.1.model_uses",
+                nombre="Model Uses",
+                numero="2.1",
+                obligatoria=True,
+                contenido=None,
+                completitud="omitida",
+                motivo_omision="No aplica al modelo",
+            ),
+        ],
+    )
+
+    writer = DocxWriter()
+    blob = writer.generar(doc, TEMPLATE_PATH)  # idioma default = "es"
+    texto = _texto_plano(blob)
+
+    assert "Sección omitida" in texto
+    assert "Section omitted" not in texto
 
 
 def test_writer_llama_a_extractor_para_secciones_tabulares() -> None:

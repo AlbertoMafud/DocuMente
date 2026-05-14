@@ -15,7 +15,7 @@ from uuid import UUID
 import streamlit as st
 
 from src.storage.repositories import DocumentoRepository
-from src.ui.components import header
+from src.ui.components import back_button, header
 from src.ui.theme import SMNYL_COLORS
 
 
@@ -39,6 +39,8 @@ def render() -> None:
 
     nombre_modelo = documento.metadata_modelo.nombre_modelo or "Documento sin nombre"
     header.render(breadcrumbs=["Inicio", nombre_modelo, "Onboarding"])
+
+    back_button.render(destino="home", etiqueta="← Volver al inicio", key="onboarding_back")
 
     text_color = SMNYL_COLORS["text"]
     muted = SMNYL_COLORS["text_muted"]
@@ -188,5 +190,9 @@ def render() -> None:
         else:
             st.toast("Onboarding saltado — los hechos se acumularán en las entrevistas", icon="ℹ️")
 
-        st.session_state["pagina"] = "dashboard"
+        # Brief inicial solo tiene sentido si el doc viene "desde cero" — todas
+        # las secciones vacías. Si viene de importar, las secciones ya tienen
+        # contenido y saltamos directo al dashboard.
+        doc_es_nuevo = all(s.completitud == "vacia" for s in documento.secciones)
+        st.session_state["pagina"] = "brief_inicial" if doc_es_nuevo else "dashboard"
         st.rerun()

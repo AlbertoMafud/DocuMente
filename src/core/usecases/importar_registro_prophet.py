@@ -111,9 +111,7 @@ class ImportarRegistroProphet:
                 seccion.completitud = "completa"
                 importadas += 1
             else:
-                advertencias.append(
-                    f"Sección '{seccion.nombre}': sin datos extraíbles del Excel."
-                )
+                advertencias.append(f"Sección '{seccion.nombre}': sin datos extraíbles del Excel.")
 
         doc = Documento(
             user_id=user_id,
@@ -152,22 +150,14 @@ class ImportarRegistroProphet:
         rows = list(ws.iter_rows(values_only=True))
         if not rows:
             return []
-        headers = [
-            str(h).strip() if h is not None else f"col_{i}"
-            for i, h in enumerate(rows[0])
-        ]
+        headers = [str(h).strip() if h is not None else f"col_{i}" for i, h in enumerate(rows[0])]
         return [
-            {
-                headers[i]: (str(c).strip() if c is not None else "")
-                for i, c in enumerate(row)
-            }
+            {headers[i]: (str(c).strip() if c is not None else "") for i, c in enumerate(row)}
             for row in rows[1:]
             if any(c is not None for c in row)
         ]
 
-    def _encontrar_hoja(
-        self, hojas: dict[str, list[Any]], seccion_id: str
-    ) -> list[dict[str, Any]]:
+    def _encontrar_hoja(self, hojas: dict[str, list[Any]], seccion_id: str) -> list[dict[str, Any]]:
         """Busca la hoja más apropiada para la sección dada."""
         candidatos = _HOJA_POR_SECCION.get(seccion_id, [])
         for nombre in candidatos:

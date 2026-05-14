@@ -17,25 +17,31 @@ JSON. Si no se inyecta extractor, los loops salen vacíos.
 from __future__ import annotations
 
 import contextlib
+import re
 from datetime import UTC, datetime
 from io import BytesIO
 from pathlib import Path
 from typing import Final
 
+import docx as docx_lib
+from docx.document import Document as DocxDocument
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Pt
+from docx.table import Table as DocxTable
 from docxtpl import DocxTemplate
 from docxtpl.subdoc import Subdoc
 
 from src.core.models import Documento
 from src.core.models.documento import EstadoDocumento
 from src.core.usecases.markdown_blocks import (
+    BloqueProsa,
     BloqueTabla,
     font_size_para_tabla,
     separar_bloques,
 )
 from src.core.usecases.markdown_cleanup import limpiar_markdown
 from src.core.usecases.richtext_render import ParrafoSpec, parsear_parrafos
+from src.core.usecases.strings_localizados import Idioma, t
 from src.core.usecases.table_extractor import TableExtractor, TableSchema
 
 # Mapeo seccion_id (catálogo NYL) → placeholder simple (definido por el usuario en plantilla)
@@ -126,16 +132,51 @@ class DocxWriter:
     def __init__(self, table_extractor: TableExtractor | None = None) -> None:
         self.table_extractor = table_extractor
 
-    def generar(self, documento: Documento, template_path: Path) -> bytes:
-        """Renderiza la plantilla con los datos del documento y devuelve bytes del .docx."""
+    def generar(
+        self,
+        documento: Documento,
+        template_path: Path,
+        *,
+        idioma: Idioma = "es",
+    ) -> bytes:
+        """Renderiza la plantilla con los datos del documento y devuelve bytes del .docx.
+
+        `idioma` controla las cadenas generadas por el writer (marcadores de
+        sección omitida, "Pendiente", etc.). El contenido propiamente dicho
+        debe traducirse antes vía `TraductorDocumento`.
+
+        Apéndices: se acumulan al final del documento en una sección dedicada
+        "Apéndices" / "Appendix", numerados A.1, A.2…. Las referencias
+        `(ver Apéndice: <titulo>)` o `(see Appendix: <titulo>)` en el body
+        se reemplazan automáticamente por `(ver Apéndice A.N)` /
+        `(see Appendix A.N)` según el índice asignado.
+        """
         tpl = DocxTemplate(template_path)
-        contexto = self._construir_contexto(documento, tpl)
+        contexto = self._construir_contexto(documento, tpl, idioma=idioma)
         tpl.render(contexto)
         buffer = BytesIO()
         tpl.save(buffer)
+
+        # Si hay apéndices, los agregamos al final reabriendo el .docx con
+        # python-docx (los Subdocs de docxtpl no soportan heading styles ni
+        # secciones independientes del template).
+        if documento.apendices:
+            buffer.seek(0)
+            doc_final = docx_lib.Document(buffer)
+            _agregar_seccion_apendices(doc_final, documento, idioma)
+            buffer_final = BytesIO()
+            doc_final.save(buffer_final)
+            return buffer_final.getvalue()
+
         return buffer.getvalue()
 
-    def _construir_contexto(self, documento: Documento, tpl: DocxTemplate) -> dict[str, object]:
+    def _construir_contexto(
+        self,
+        documento: Documento,
+        tpl: DocxTemplate,
+        *,
+        idioma: Idioma = "es",
+    ) -> dict[str, object]:
         meta = documento.metadata_modelo
         ahora = datetime.now(UTC).astimezone()
         contexto: dict[str, object] = {
@@ -159,12 +200,21 @@ class DocxWriter:
             "estado_documento": _ETIQUETA_ESTADO_HUMANA[documento.estado],
         }
 
-        # Mapeo de placeholders de sección — cada uno como Subdoc con formato real
-        # + sus apéndices vinculados (uploads de Excel/CSV) al final.
+        # Índice de apéndices por título → "A.N" para reemplazar cross-refs
+        # en el body antes de renderizar.
+        apendice_label_por_titulo = _indexar_apendices(documento, idioma)
+
+        # Mapeo de placeholders de sección — cada uno como Subdoc con formato real.
+        # Los apéndices YA NO se inyectan en el Subdoc de la sección; se agregan
+        # como sección dedicada al final del documento (ver `generar`).
         for seccion_id, placeholder in _MAPA_SECCION_PLACEHOLDER.items():
             seccion = documento.seccion_por_id(seccion_id)
-            apendices = [a for a in documento.apendices if a.seccion_origen_id == seccion_id]
-            contexto[placeholder] = _renderizar_seccion(tpl, seccion, apendices=apendices)
+            contexto[placeholder] = _renderizar_seccion(
+                tpl,
+                seccion,
+                idioma=idioma,
+                apendice_label_por_titulo=apendice_label_por_titulo,
+            )
 
         # Loop version_history desde audit_trail
         contexto["version_history"] = _construir_version_history(documento)
@@ -185,26 +235,27 @@ def _renderizar_seccion(
     tpl: DocxTemplate,
     seccion: object,
     *,
-    apendices: list | None = None,
+    idioma: Idioma = "es",
+    apendice_label_por_titulo: dict[str, str] | None = None,
 ) -> Subdoc:
-    """Devuelve un Subdoc con el contenido de la sección + apéndices al final.
+    """Devuelve un Subdoc con el contenido de la sección.
 
     Procesamiento:
-    1. `limpiar_markdown` quita tablas pipe-separated, separadores y hashes
+    1. Reemplazar referencias `(ver Apéndice: <titulo>)` por `(ver Apéndice A.N)`
+       (idem para inglés) si `apendice_label_por_titulo` mapea el título.
+    2. `limpiar_markdown` quita tablas pipe-separated, separadores y hashes
        (preservando `**bold**` y `*italic*` para conversión a formato real).
-    2. `parsear_parrafos` divide en bloques con runs.
-    3. Cada `ParrafoSpec` se vuelve un párrafo del Subdoc con runs reales:
-       `bold=True` y `italic=True` aplican formato de Word.
-    4. Subtítulos (líneas solas con `**xxx**`) se alinean a la izquierda
-       para evitar el efecto raro de justified con frases cortas.
-    5. Bullets reciben prefijo `•`.
-    6. Apéndices vinculados a esta sección se renderizan al final con título
-       en bold y su contenido (incluyendo tabla del archivo subido).
+    3. `parsear_parrafos` divide en bloques con runs.
+    4. Cada `ParrafoSpec` se vuelve un párrafo del Subdoc con runs reales.
+    5. Subtítulos (líneas solas con `**xxx**`) alineados a la izquierda.
+    6. Bullets reciben prefijo `•`.
+
+    Los apéndices YA NO se rendereaban aquí — ahora viven en una sección
+    dedicada al final del documento (ver `_agregar_seccion_apendices`).
     """
     sub = tpl.new_subdoc()
     if seccion is None:
-        sub.add_paragraph("[Sección no presente en el catálogo]")
-        _renderizar_apendices(sub, apendices)
+        sub.add_paragraph(t("seccion_no_catalogo", idioma))
         return sub
 
     completitud = getattr(seccion, "completitud", None)
@@ -212,14 +263,15 @@ def _renderizar_seccion(
     motivo = getattr(seccion, "motivo_omision", None) or ""
 
     if completitud == "omitida":
-        razon = motivo or "Sin motivo registrado"
-        sub.add_paragraph(f"Sección omitida — {razon}")
-        _renderizar_apendices(sub, apendices)
+        razon = motivo or t("seccion_sin_motivo", idioma)
+        sub.add_paragraph(f"{t('seccion_omitida_prefijo', idioma)}{razon}")
         return sub
     if not contenido.strip():
-        sub.add_paragraph("[Pendiente — sin contenido capturado]")
-        _renderizar_apendices(sub, apendices)
+        sub.add_paragraph(t("pendiente_sin_contenido", idioma))
         return sub
+
+    if apendice_label_por_titulo:
+        contenido = _reemplazar_referencias_apendices(contenido, apendice_label_por_titulo, idioma)
 
     texto = limpiar_markdown(contenido, conservar_enfasis=True)
     parrafos = parsear_parrafos(texto)
@@ -229,41 +281,150 @@ def _renderizar_seccion(
         for p_spec in parrafos:
             _agregar_parrafo(sub, p_spec)
 
-    _renderizar_apendices(sub, apendices)
     return sub
 
 
-def _renderizar_apendices(sub: Subdoc, apendices: list | None) -> None:
-    """Agrega cada apéndice como bloque al final del Subdoc.
+def _indexar_apendices(documento: Documento, idioma: Idioma) -> dict[str, str]:
+    """Mapea cada título de apéndice a su etiqueta de cross-ref (`A.1`, `A.2`…).
 
-    Estructura por apéndice:
-    - Línea en blanco (separación visual).
-    - Título en bold "Apéndice: <titulo>".
-    - Contenido procesado bloque por bloque:
-      - Tablas markdown → tablas nativas de Word con `Table Grid` style y
-        font size adaptable según densidad.
-      - Prosa → párrafos con runs (bold/italic preservados).
+    Numeración por orden de aparición en `documento.apendices` (orden de
+    adjunción del usuario). Si dos apéndices comparten título, gana el primero.
+    Devuelve `{}` si no hay apéndices.
+
+    El idioma no afecta la numeración pero se acepta como parámetro para
+    futura extensibilidad (ej. numeración localizada).
     """
-    if not apendices:
+    del idioma  # numeración A.N es universal; idioma reservado para extensión
+    mapa: dict[str, str] = {}
+    for i, ap in enumerate(documento.apendices, start=1):
+        titulo = (getattr(ap, "titulo", "") or "").strip()
+        if titulo and titulo not in mapa:
+            mapa[titulo] = f"A.{i}"
+    return mapa
+
+
+_REGEX_REF_APENDICE = re.compile(
+    r"\((ver Apéndice|see Appendix):\s*([^)]+?)\)",
+    re.IGNORECASE,
+)
+
+
+def _reemplazar_referencias_apendices(
+    contenido: str,
+    label_por_titulo: dict[str, str],
+    idioma: Idioma,
+) -> str:
+    """Reemplaza `(ver Apéndice: <titulo>)` por `(ver Apéndice A.N)`.
+
+    En inglés, también acepta `(see Appendix: <titulo>)` y produce
+    `(see Appendix A.N)`. Si el título no matchea ningún apéndice, deja
+    la referencia tal cual (no rompe).
+    """
+    if not label_por_titulo:
+        return contenido
+
+    etiqueta = t("ver_apendice", idioma)  # "ver Apéndice" o "see Appendix"
+
+    def _sustituir(match: re.Match[str]) -> str:
+        titulo_referenciado = match.group(2).strip()
+        label = label_por_titulo.get(titulo_referenciado)
+        if label is None:
+            # Búsqueda case-insensitive como fallback
+            for titulo_real, lbl in label_por_titulo.items():
+                if titulo_real.lower() == titulo_referenciado.lower():
+                    label = lbl
+                    break
+        if label is None:
+            return match.group(0)  # sin match, dejar tal cual
+        return f"({etiqueta} {label})"
+
+    return _REGEX_REF_APENDICE.sub(_sustituir, contenido)
+
+
+def _agregar_seccion_apendices(
+    doc: DocxDocument,
+    documento: Documento,
+    idioma: Idioma,
+) -> None:
+    """Agrega al final del documento la sección "Apéndices" / "Appendix".
+
+    Cada apéndice:
+    - Heading nivel 2: "A.N: <titulo>".
+    - Contenido bloque por bloque: tablas markdown → tablas nativas con
+      bordes y font adaptable; prosa → párrafos con runs (bold/italic).
+    """
+    if not documento.apendices:
         return
-    for ap in apendices:
-        titulo = getattr(ap, "titulo", "") or "Apéndice"
+
+    # Encabezado de sección.
+    doc.add_heading(t("apendices_plural", idioma), level=1)
+
+    for i, ap in enumerate(documento.apendices, start=1):
+        titulo = (getattr(ap, "titulo", "") or "").strip() or t("apendice_singular", idioma)
         contenido_md = getattr(ap, "contenido_md", "") or ""
-        sub.add_paragraph()  # separador visual
-        p_titulo = sub.add_paragraph()
-        run_titulo = p_titulo.add_run(f"Apéndice: {titulo}")
-        run_titulo.bold = True
+
+        # Heading "A.N: <titulo>"
+        doc.add_heading(f"A.{i}: {titulo}", level=2)
 
         if not contenido_md.strip():
             continue
 
         for bloque in separar_bloques(contenido_md):
             if isinstance(bloque, BloqueTabla):
-                _agregar_tabla_word(sub, bloque)
-            else:  # BloqueProsa
+                _agregar_tabla_documento(doc, bloque)
+            elif isinstance(bloque, BloqueProsa):
                 texto_limpio = limpiar_markdown(bloque.texto, conservar_enfasis=True)
                 for p_spec in parsear_parrafos(texto_limpio):
-                    _agregar_parrafo(sub, p_spec)
+                    _agregar_parrafo_documento(doc, p_spec)
+
+
+def _agregar_tabla_documento(doc: DocxDocument, bloque: BloqueTabla) -> None:
+    """Versión de `_agregar_tabla_word` que opera sobre un Document, no Subdoc."""
+    if not bloque.headers:
+        return
+    n_columnas = len(bloque.headers)
+    n_filas_datos = len(bloque.rows)
+    font_pt = font_size_para_tabla(n_filas=n_filas_datos, n_columnas=n_columnas)
+
+    table: DocxTable = doc.add_table(rows=1 + n_filas_datos, cols=n_columnas)
+    with contextlib.suppress(KeyError):
+        table.style = "Table Grid"
+
+    for j, header in enumerate(bloque.headers):
+        cell = table.cell(0, j)
+        cell.text = ""
+        para = cell.paragraphs[0]
+        run = para.add_run(header)
+        run.bold = True
+        run.font.size = Pt(font_pt)
+
+    for i, fila in enumerate(bloque.rows, start=1):
+        for j in range(n_columnas):
+            valor = fila[j] if j < len(fila) else ""
+            cell = table.cell(i, j)
+            cell.text = ""
+            para = cell.paragraphs[0]
+            run = para.add_run(valor)
+            run.font.size = Pt(font_pt)
+
+
+def _agregar_parrafo_documento(doc: DocxDocument, p_spec: ParrafoSpec) -> None:
+    """Versión de `_agregar_parrafo` que opera sobre un Document, no Subdoc."""
+    prefijo = "•  " if p_spec.es_bullet else ""
+
+    parrafo = doc.add_paragraph()
+    if p_spec.es_subtitulo:
+        parrafo.alignment = WD_ALIGN_PARAGRAPH.LEFT
+
+    if prefijo:
+        parrafo.add_run(prefijo)
+
+    for run_spec in p_spec.runs:
+        run = parrafo.add_run(run_spec.text)
+        if run_spec.bold:
+            run.bold = True
+        if run_spec.italic:
+            run.italic = True
 
 
 def _agregar_tabla_word(sub: Subdoc, bloque: BloqueTabla) -> None:

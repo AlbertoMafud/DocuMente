@@ -1,6 +1,7 @@
 """Componentes UI reutilizables con marca SMNYL."""
 
 from src.ui.components import (
+    back_button,
     chat_bubble,
     empty_state,
     gap_badge,
@@ -11,6 +12,7 @@ from src.ui.components import (
 )
 
 __all__ = [
+    "back_button",
     "chat_bubble",
     "empty_state",
     "gap_badge",
