@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import pytest
-
 from src.core.template_catalog_prophet import (
     TEMPLATE_PROPHET,
     construir_secciones_vacias_prophet,
