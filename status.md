@@ -2,17 +2,17 @@
 
 > Estado vivo del proyecto. Se lee al iniciar sesión y se actualiza al cerrar si hubo cambios significativos.
 
-**Última actualización:** 2026-05-12 (sesión 10 — v2.10 mejoras post-feedback + handoff a sesión Prophet)
+**Última actualización:** 2026-05-14 (sesión 11 — Prophet Fase 0 implementada completa)
 
 ---
 
 ## Estado actual
 
-**Fases 0-4 + Fase 3 + Fase 6 ✅ completas + features "crear desde cero" (S9) y v2.10 mejoras (S10) ✅.** Solo falta Fase 5 (pulido UX final).
+**Fases 0-4 + Fase 3 + Fase 6 ✅ completas + features "crear desde cero" (S9) + v2.10 mejoras (S10) + Prophet Fase 0 (S11) ✅.** Solo falta Fase 5 (pulido UX final).
 
-**MVP cerrado con mejoras incorporadas de feedback temprano de usuarios.** Repo GitHub `AlbertoMafud/DocuMente` en `45748b4` (último commit a `origin/main`). Working tree con cambios de sesión 10 sin commitear aún. **236 tests pasando** (de 182 baseline, +54), ruff/format clean, mypy sin nuevos errores en archivos modificados.
+**MVP cerrado + módulo Prophet Fase 0 implementado.** Repo GitHub `AlbertoMafud/DocuMente` en `45748b4` (último commit empujado; cambios S10 y S11 están en working tree, **sin push aún** — Alberto quiere revisar primero). **263 tests pasando** (de 236 baseline S10, +27 en S11), ruff/format clean.
 
-**Próximo:** Alberto valida visualmente las 5 mejoras en la app local (multi-archivo, traducción EN completa, botón volver, apéndices reorganizados, brief inicial) → decisión de commitear y empujar a GitHub → seguir con plan original (reunión Vidal → M1 containerización → Fase 5 collateral) → arrancar **sesión dedicada del módulo Prophet (Fase 0)**.
+**Próximo:** Alberto revisa visualmente el módulo Prophet en la app local → decisión de commit + push a `origin/main` → demo con Carmona/Cynthia/Magallanes → Fase Prophet-1 solo si demo es positiva.
 
 ---
 
@@ -463,3 +463,90 @@ Al intentar `streamlit run app.py` se reveló que la variable de entorno `ANTHRO
 2. **Foco Prophet:** sesión dedicada al módulo Prophet Fase 0. Contexto completo en `prophet_module_context.md` en el folder de memoria. Las 4 preguntas abiertas se resuelven al inicio.
 
 Alberto puede hacer (1) primero en una sesión corta y (2) en una sesión dedicada de 2-3 horas. O combinarlas.
+
+---
+
+## Progreso de sesión 11 (2026-05-14)
+
+### Módulo Prophet — Fase 0 implementada completa
+
+Se ejecutó el plan `docs/superpowers/plans/2026-05-14-prophet-fase0.md` vía Subagent-Driven Development (13 tareas, ~2-3 horas de trabajo, Haiku/Sonnet para subagentes mecánicos, Sonnet para revisores).
+
+**Alberto verificó la app corriendo en `localhost:8502` con los tres botones en home (Importar, Crear, Iniciar Ficha Prophet).** Confirmó que todo está OK visualmente. Decisión de push a GitHub diferida a próxima sesión.
+
+#### Nuevos archivos (15)
+
+| Archivo | Propósito |
+|---|---|
+| `src/core/template_catalog_prophet.py` | Catálogo de 12 secciones Prophet, independiente del MRM |
+| `src/llm/prompts/extraer_seccion_prophet.py` | Prompt Haiku: no inventar datos, mapeo best-effort, JSON puro |
+| `src/core/usecases/detectar_modelos_prophet.py` | Lee .xlsx crudo (openpyxl) + detecta hoja catálogo + lista modelos |
+| `src/core/usecases/importar_registro_prophet.py` | Import completo: openpyxl + Haiku → `Documento(tipo="prophet")` persistido |
+| `src/core/usecases/docx_writer_prophet.py` | Writer Prophet independiente del MRM; `render(doc) -> bytes` |
+| `src/ui/pages/crear_prophet.py` | UI: upload xlsx → selectbox → importar → navega a dashboard |
+| `src/ui/pages/editar_seccion_prophet.py` | Editor de sección Prophet: tabla (st.data_editor), texto, campos |
+| `src/docs/templates/prophet_model_doc_smnyl.docx` | Template Word minimal con placeholders de texto (Fase 0) |
+| `docs/Modulo Prophet MA/Registro_Modelos_Template.xlsx` | Template Excel para MA con 4 hojas y ejemplo SMNYL |
+| `docs/Modulo Prophet MA/Guia_Llenado_Registro.md` | Guía para usuarios MA: hojas, columnas, niveles de skill |
+| `tests/unit/test_template_catalog_prophet.py` | 9 tests del catálogo |
+| `tests/unit/test_detectar_modelos_prophet.py` | 5 tests de detección de modelos |
+| `tests/unit/test_importar_registro_prophet.py` | 5 tests de import (fixtures con xlsx real, DB aislada) |
+| `tests/unit/test_docx_writer_prophet.py` | 5 tests del writer Prophet |
+| `tests/unit/test_editar_seccion_prophet.py` | 3 tests de persistencia de edición |
+
+#### Archivos modificados (4)
+
+| Archivo | Cambio |
+|---|---|
+| `src/core/models/documento.py` | `TipoDocumento` extendido: `Literal["model_development", "prophet"]` |
+| `src/core/usecases/__init__.py` | Exports de los 3 nuevos use cases Prophet |
+| `app.py` | Tercer botón "Iniciar Ficha Prophet" en home + 2 rutas nuevas |
+| `src/ui/pages/dashboard.py` | Botón "Exportar Ficha Prophet" en card Gobernanza cuando `tipo=="prophet"` |
+
+#### Decisiones de implementación clave
+
+- **`EventoAuditoria.tipo`:** usar `"seccion_editada"` (no `"seccion_actualizada"` — ese valor no existe en el Literal).
+- **`DATABASE_URL`** (no `DOCUMENTE_DB_PATH`): variable de entorno que controla la BD en `src/storage/db.py`.
+- **`repo.obtener(UUID(doc_id))`** (no `.obtener_por_str()`): la firma correcta del repositorio.
+- **Template Word minimal:** placeholder de texto puro (sin loops docxtpl) por ahora; el template SMNYL completo con loops va antes de la demo con MA.
+- **Heurística + LLM fallback en detección:** `DetectarModelosProphet` usa heurística de columnas si Haiku no está disponible.
+- **`EventoAuditoria.metadata` es `dict[str, str]`:** valores int se convierten explícitamente a str.
+
+#### Calidad
+
+- **263/263 tests pasan** (de 236 baseline, +27 nuevos).
+- `ruff check` y `ruff format` clean.
+- `mypy` sin errores nuevos en archivos modificados.
+- App arranca correctamente: `python -m streamlit run app.py` en `localhost:8502`.
+
+---
+
+## Lo que sigue — sesión 12
+
+### Prioridad 1: Push a GitHub (10 min)
+- Commit atómico o split (S10 v2.10 + S11 Prophet) → `git push origin main`.
+- Decidir si los cambios de S10 van en un commit separado o junto con Prophet.
+
+### Prioridad 2: Template DOCX Prophet completo (antes de demo)
+- El `.docx` actual es minimal (solo placeholders de texto, sin table loops).
+- Abrir `src/docs/templates/prophet_model_doc_smnyl.docx` en Word y agregar diseño SMNYL + loops docxtpl para runs, variables, inputs, skills_matrix.
+- Alternativamente: generar el template programáticamente con python-docx completo.
+
+### Prioridad 3: Demo con MA
+- Carmona, Cynthia Flores, Juan Carlos Magallanes.
+- Llevar: app local + `Registro Modelos_envioAlberto.xlsx` + guía de llenado.
+
+### Prioridad 4: Validación visual de S10 (si no se hizo)
+- Checklist en `pending_validation_items.md`.
+
+### Pendientes menores
+- Fix permanente `ANTHROPIC_API_KEY` vacía en OS env: `[Environment]::SetEnvironmentVariable("ANTHROPIC_API_KEY", $null, "User")` desde PowerShell usuario.
+- Borrar carpeta huérfana `.claude/worktrees/cool-wing-eca24c` (cosmético).
+
+### Bloqueos conocidos
+
+- **Sin push a GitHub aún** — working tree con S10 + S11 sin commitear.
+- **Template Prophet minimal** — funcional pero sin diseño SMNYL completo ni loops de tabla.
+- **Prophet Fase 1** — NO arrancar sin feedback positivo de la demo.
+- **Pulido formal de plantilla MRM** sigue diferido hasta antes de demo externa.
+- **`ANTHROPIC_API_KEY` vacía en OS env** — fix pendiente.
