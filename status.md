@@ -2,7 +2,7 @@
 
 > Estado vivo del proyecto. Se lee al iniciar sesión y se actualiza al cerrar si hubo cambios significativos.
 
-**Última actualización:** 2026-05-14 (sesión 11 — Prophet Fase 0 implementada completa)
+**Última actualización:** 2026-05-18 (sesión 12 — push a GitHub, reunión Vidal, fixes locales)
 
 ---
 
@@ -10,9 +10,9 @@
 
 **Fases 0-4 + Fase 3 + Fase 6 ✅ completas + features "crear desde cero" (S9) + v2.10 mejoras (S10) + Prophet Fase 0 (S11) ✅.** Solo falta Fase 5 (pulido UX final).
 
-**MVP cerrado + módulo Prophet Fase 0 implementado.** Repo GitHub `AlbertoMafud/DocuMente` en `45748b4` (último commit empujado; cambios S10 y S11 están en working tree, **sin push aún** — Alberto quiere revisar primero). **263 tests pasando** (de 236 baseline S10, +27 en S11), ruff/format clean.
+**MVP cerrado + módulo Prophet Fase 0 implementado.** Repo GitHub `AlbertoMafud/DocuMente` en `8d64520` (todo pusheado incluyendo S10 + S11 + limpieza de S12). **263 tests pasando**, ruff/format clean.
 
-**Próximo:** Alberto revisa visualmente el módulo Prophet en la app local → decisión de commit + push a `origin/main` → demo con Carmona/Cynthia/Magallanes → Fase Prophet-1 solo si demo es positiva.
+**Próximo:** Template DOCX Prophet completo (diseño SMNYL + loops) → demo con Carmona/Cynthia/Magallanes → seguimiento con Vidal para EC2 → Fase Prophet-1 solo si demo es positiva.
 
 ---
 
@@ -521,32 +521,54 @@ Se ejecutó el plan `docs/superpowers/plans/2026-05-14-prophet-fase0.md` vía Su
 
 ---
 
-## Lo que sigue — sesión 12
+## Progreso de sesión 12 (2026-05-18)
 
-### Prioridad 1: Push a GitHub (10 min)
-- Commit atómico o split (S10 v2.10 + S11 Prophet) → `git push origin main`.
-- Decidir si los cambios de S10 van en un commit separado o junto con Prophet.
+### Push a GitHub ✅
+- Se hizo commit + push de todo lo pendiente (S10 + S11 + limpieza).
+- Repo en `8d64520`. Working tree limpio.
+- `.gitignore` actualizado: agrega `.superpowers/` y `docs/Comentarios/`.
+- Archivos basura `=3.1.0` y `=4.3.0` (pip artifacts) eliminados.
+
+### Reunión con Vidal (arquitecto de datos) ✅
+- Se explicó la estrategia de migración a Bedrock: swap de adaptador `BedrockClient`, IAM role en EC2, sin cambios a lógica de negocio. 1-2 días de trabajo.
+- Se compartió el repo: invitar a Vidal como colaborador Read en `github.com/AlbertoMafud/DocuMente → Settings → Collaborators`.
+- Vidal tiene acceso al runbook técnico en `docs/MIGRATION_TO_EC2.md` y arquitectura en `docs/technical_architecture_for_data_architect.md`.
+
+### Fixes locales ✅
+- **`ANTHROPIC_API_KEY` vacía en OS env:** eliminada permanentemente con `[Environment]::SetEnvironmentVariable("ANTHROPIC_API_KEY", $null, "User")`. Fix aplicado y verificado.
+- **Anthropic SDK desactualizado:** actualizado de `0.40.0` → `0.102.0`. El parámetro `thinking` requería >=0.50.0 aprox.
+- App corriendo localmente sin errores después de ambos fixes.
+
+### ⚠️ Pendiente técnico detectado
+- La versión de `anthropic` en `pyproject.toml` no está fijada con lower bound adecuado. En EC2 podría instalarse una versión vieja y reproducir el error de `thinking`. **Fijar en próxima sesión.**
+
+---
+
+## Lo que sigue — sesión 13
+
+### Prioridad 1: Fijar versión de anthropic en pyproject.toml
+- Cambiar a `anthropic>=0.50.0` (o la versión mínima que soporta `thinking`).
+- Commitear y pushear.
+- **Crítico para EC2:** si Vidal instala con la versión del pyproject.toml actual, tendrá el mismo error.
 
 ### Prioridad 2: Template DOCX Prophet completo (antes de demo)
-- El `.docx` actual es minimal (solo placeholders de texto, sin table loops).
-- Abrir `src/docs/templates/prophet_model_doc_smnyl.docx` en Word y agregar diseño SMNYL + loops docxtpl para runs, variables, inputs, skills_matrix.
-- Alternativamente: generar el template programáticamente con python-docx completo.
+- Archivo actual `src/docs/templates/prophet_model_doc_smnyl.docx` es minimal — solo texto plano.
+- Necesita: diseño SMNYL + 4 loops docxtpl (`runs`, `variables_criticas`, `inputs`, `skills_matrix`).
+- Hacerlo en Word o programáticamente con python-docx.
 
 ### Prioridad 3: Demo con MA
 - Carmona, Cynthia Flores, Juan Carlos Magallanes.
 - Llevar: app local + `Registro Modelos_envioAlberto.xlsx` + guía de llenado.
 
-### Prioridad 4: Validación visual de S10 (si no se hizo)
-- Checklist en `pending_validation_items.md`.
+### Prioridad 4: Validación visual S10
+- Checklist en `pending_validation_items.md` (aún sin completar).
 
 ### Pendientes menores
-- Fix permanente `ANTHROPIC_API_KEY` vacía en OS env: `[Environment]::SetEnvironmentVariable("ANTHROPIC_API_KEY", $null, "User")` desde PowerShell usuario.
-- Borrar carpeta huérfana `.claude/worktrees/cool-wing-eca24c` (cosmético).
+- Borrar carpeta huérfana `.claude/worktrees/cool-wing-eca24c` (cosmético, no afecta git).
 
 ### Bloqueos conocidos
 
-- **Sin push a GitHub aún** — working tree con S10 + S11 sin commitear.
-- **Template Prophet minimal** — funcional pero sin diseño SMNYL completo ni loops de tabla.
-- **Prophet Fase 1** — NO arrancar sin feedback positivo de la demo.
-- **Pulido formal de plantilla MRM** sigue diferido hasta antes de demo externa.
-- **`ANTHROPIC_API_KEY` vacía en OS env** — fix pendiente.
+- **Template Prophet minimal** — funcional pero sin diseño SMNYL ni loops de tabla.
+- **Prophet Fase 1** — NO arrancar sin feedback positivo de la demo con MA.
+- **Pulido formal de plantilla MRM** — diferido hasta antes de demo externa.
+- **EC2 con Vidal** — en progreso; Vidal tiene el repo y el runbook.
