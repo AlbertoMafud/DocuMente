@@ -318,9 +318,49 @@ TEMPLATE_MODEL_DEVELOPMENT: tuple[SeccionCatalogo, ...] = (
 )
 
 
+# Nombre humano de cada capítulo del template NYL (derivado de
+# docs/TEMPLATE_MODEL_DEV.md). Usado por el dashboard para agrupar las 28
+# secciones en 9 buckets navegables (resuelve Miller's Law — wall-of-28-cards).
+CAPITULOS_NYL: dict[str, str] = {
+    "1": "Problem Statement",
+    "2": "Model Profile",
+    "3": "Ancillary Documents",
+    "4": "Methodology",
+    "5": "Data",
+    "6": "Implementation",
+    "7": "Outputs & Performance",
+    "8": "Model Governance",
+    "9": "Ongoing Monitoring",
+}
+
+
 def por_id(seccion_id: str) -> SeccionCatalogo | None:
     """Devuelve la entrada del catálogo por ID, o None."""
     return next((s for s in TEMPLATE_MODEL_DEVELOPMENT if s.id == seccion_id), None)
+
+
+def agrupar_secciones_por_capitulo(
+    secciones: list[Seccion],
+) -> list[tuple[str, str, list[Seccion]]]:
+    """Agrupa secciones por capítulo NYL preservando el orden del template.
+
+    Devuelve una lista de tuplas `(numero_capitulo, nombre_capitulo, secciones)`
+    en orden ascendente por capítulo. Siempre devuelve los 9 capítulos, aun
+    si alguno queda con lista vacía — facilita rendering consistente.
+
+    Las secciones dentro de cada capítulo se ordenan lexicográficamente por
+    numero (ej. "5.1" < "5.3.1" < "5.4").
+    """
+
+    def _orden_seccion(numero: str) -> list[int]:
+        return [int(p) for p in numero.split(".")]
+
+    grupos: list[tuple[str, str, list[Seccion]]] = []
+    for cap_num in sorted(CAPITULOS_NYL.keys(), key=int):
+        del_cap = [s for s in secciones if s.numero.split(".")[0] == cap_num]
+        del_cap.sort(key=lambda s: _orden_seccion(s.numero))
+        grupos.append((cap_num, CAPITULOS_NYL[cap_num], del_cap))
+    return grupos
 
 
 def construir_secciones_vacias() -> list[Seccion]:

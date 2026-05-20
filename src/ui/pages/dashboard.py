@@ -16,9 +16,10 @@ from uuid import UUID
 import streamlit as st
 
 from src.config import get_settings
-from src.core.models import Brecha, Documento
+from src.core.models import Brecha, Documento, Seccion
 from src.core.models.documento import EstadoDocumento
 from src.core.rules import DocumentStateMachine
+from src.core.template_catalog import agrupar_secciones_por_capitulo
 from src.core.usecases import (
     MOTIVOS_OMISION,
     CambiarEstadoDocumento,
@@ -785,6 +786,80 @@ def _render_acciones_estado(documento: Documento, sm: DocumentStateMachine) -> N
                     st.rerun()
 
 
+def _primer_capitulo_con_pendientes(
+    grupos: list[tuple[str, str, list[Seccion]]],
+    brechas: list[Brecha],
+) -> str | None:
+    """Devuelve el número del primer capítulo que tiene brechas críticas o
+    secciones vacías/parciales. Si no hay pendientes, devuelve `None`.
+
+    El dashboard expande automáticamente ese capítulo para guiar al usuario
+    al trabajo que sigue (goal-gradient effect del audit UX).
+    """
+    seccion_ids_con_brecha_alta = {b.seccion_id for b in brechas if b.severidad == "alta"}
+    for cap_num, _, secs in grupos:
+        if not secs:
+            continue
+        tiene_brecha_alta = any(s.id in seccion_ids_con_brecha_alta for s in secs)
+        tiene_pendientes = any(s.completitud in ("vacia", "parcial") for s in secs)
+        if tiene_brecha_alta or tiene_pendientes:
+            return cap_num
+    return None
+
+
+def _render_seccion_con_acciones(
+    documento: Documento,
+    seccion: Seccion,
+    brechas_por_seccion: dict[str, int],
+) -> None:
+    """Renderiza una SectionCard + sus botones de acción contextuales."""
+    seccion_card.render(
+        seccion,
+        brechas_count=brechas_por_seccion.get(seccion.id, 0),
+    )
+    if seccion.completitud == "omitida":
+        if st.button(
+            "Reactivar",
+            key=f"reactivar_{seccion.id}",
+            use_container_width=True,
+            help="Vuelve la sección a 'vacía' para retomarla.",
+        ):
+            repo_reset = DocumentoRepository()
+            doc_reset = repo_reset.obtener(documento.id)
+            if doc_reset is not None:
+                seccion_reset = doc_reset.seccion_por_id(seccion.id)
+                if seccion_reset is not None:
+                    seccion_reset.completitud = "vacia"
+                    seccion_reset.motivo_omision = None
+                    repo_reset.guardar(doc_reset)
+                    st.toast(f"Sección {seccion.numero} reactivada.", icon="↩️")
+                    st.rerun()
+    else:
+        col_int, col_omit = st.columns(2)
+        with col_int:
+            if st.button(
+                "Entrevistar",
+                key=f"interview_{seccion.id}",
+                use_container_width=True,
+            ):
+                st.session_state["seccion_entrevista_id"] = seccion.id
+                st.session_state["pagina"] = "entrevista"
+                st.rerun()
+        with col_omit:
+            if st.button(
+                "Omitir",
+                key=f"omitir_{seccion.id}",
+                use_container_width=True,
+                help="Marcar como omitida con motivo justificado.",
+            ):
+                _dialog_omitir_seccion(
+                    str(documento.id),
+                    seccion.id,
+                    f"{seccion.numero} {seccion.nombre}",
+                    seccion.intencion or "",
+                )
+
+
 def render() -> None:
     documento_id_str = st.session_state.get("documento_actual_id")
     if not documento_id_str:
@@ -926,55 +1001,35 @@ def render() -> None:
     for b in brechas:
         brechas_por_seccion[b.seccion_id] += 1
 
-    # Renderizar grid de 3 columnas, cada card con botones de acción
-    cols = st.columns(3)
-    for i, seccion in enumerate(documento.secciones):
-        with cols[i % 3]:
-            seccion_card.render(
-                seccion,
-                brechas_count=brechas_por_seccion.get(seccion.id, 0),
-            )
-            if seccion.completitud == "omitida":
-                if st.button(
-                    "Reactivar",
-                    key=f"reactivar_{seccion.id}",
-                    use_container_width=True,
-                    help="Vuelve la sección a 'vacía' para retomarla.",
-                ):
-                    repo_reset = DocumentoRepository()
-                    doc_reset = repo_reset.obtener(documento.id)
-                    if doc_reset is not None:
-                        seccion_reset = doc_reset.seccion_por_id(seccion.id)
-                        if seccion_reset is not None:
-                            seccion_reset.completitud = "vacia"
-                            seccion_reset.motivo_omision = None
-                            repo_reset.guardar(doc_reset)
-                            st.toast(f"Sección {seccion.numero} reactivada.", icon="↩️")
-                            st.rerun()
-            else:
-                col_int, col_omit = st.columns(2)
-                with col_int:
-                    if st.button(
-                        "Entrevistar",
-                        key=f"interview_{seccion.id}",
-                        use_container_width=True,
-                    ):
-                        st.session_state["seccion_entrevista_id"] = seccion.id
-                        st.session_state["pagina"] = "entrevista"
-                        st.rerun()
-                with col_omit:
-                    if st.button(
-                        "Omitir",
-                        key=f"omitir_{seccion.id}",
-                        use_container_width=True,
-                        help="Marcar como omitida con motivo justificado.",
-                    ):
-                        _dialog_omitir_seccion(
-                            str(documento.id),
-                            seccion.id,
-                            f"{seccion.numero} {seccion.nombre}",
-                            seccion.intencion or "",
-                        )
+    # Agrupar secciones por capítulo NYL — resuelve Miller (wall-of-28-cards).
+    # Identificar el primer capítulo con brechas críticas o secciones vacías
+    # para expandirlo por default; los demás quedan colapsados.
+    grupos = agrupar_secciones_por_capitulo(list(documento.secciones))
+    primer_cap_con_pendientes = _primer_capitulo_con_pendientes(grupos, brechas)
+
+    for cap_num, cap_nombre, secs_cap in grupos:
+        if not secs_cap:
+            continue  # capítulo sin secciones — saltar silenciosamente
+        n_completas = sum(1 for s in secs_cap if s.completitud == "completa")
+        n_omitidas = sum(1 for s in secs_cap if s.completitud == "omitida")
+        n_resueltas = n_completas + n_omitidas
+        n_total = len(secs_cap)
+        # Header del expander: "Cap N: Nombre — X de Y resueltas"
+        if n_resueltas == n_total:
+            estado_marker = "✓"
+        elif n_resueltas == 0:
+            estado_marker = "○"
+        else:
+            estado_marker = "◐"
+        header_titulo = (
+            f"{estado_marker}  Capítulo {cap_num}: {cap_nombre}  "
+            f"·  {n_resueltas} de {n_total} resueltas"
+        )
+        with st.expander(header_titulo, expanded=(cap_num == primer_cap_con_pendientes)):
+            cols = st.columns(3)
+            for i, seccion in enumerate(secs_cap):
+                with cols[i % 3]:
+                    _render_seccion_con_acciones(documento, seccion, brechas_por_seccion)
 
     st.markdown("<div style='height: 3rem;'></div>", unsafe_allow_html=True)
 
