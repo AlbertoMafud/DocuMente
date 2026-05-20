@@ -42,12 +42,92 @@ def _doc_en_progreso_mas_reciente(repo: DocumentoRepository, user_id: str):
     return max(en_progreso, key=lambda d: d.actualizado_en)
 
 
+def _set_undo_visibilidad(*, tipo: str, doc_id, nombre: str) -> None:
+    """Registra una acción reversible (archivar/papelera) para el banner Deshacer.
+
+    El banner se renderiza al inicio de la home en el siguiente rerun y persiste
+    hasta que el usuario hace clic en Deshacer o lo cierra.
+    """
+    st.session_state["undo_visibilidad"] = {
+        "tipo": tipo,  # "archivar" | "papelera"
+        "doc_id": str(doc_id),
+        "nombre": nombre,
+    }
+
+
+def _render_undo_banner(repo: DocumentoRepository, user_id: str) -> None:
+    """Banner con CTA Deshacer después de una acción de visibilidad reciente.
+
+    Streamlit's `st.toast` no acepta botones, así que la "Deshacer" pattern
+    de Gmail se implementa como un banner persistente arriba de la home.
+    """
+    undo = st.session_state.get("undo_visibilidad")
+    if undo is None:
+        return
+
+    tipo = undo["tipo"]
+    nombre = undo["nombre"]
+    doc_id_str = undo["doc_id"]
+    accion_label = "archivado" if tipo == "archivar" else "movido a papelera"
+    bg = SMNYL_COLORS["info_soft"]
+    txt = SMNYL_COLORS["info_dark"]
+
+    col_msg, col_undo, col_close = st.columns([6, 1.2, 0.6])
+    with col_msg:
+        st.markdown(
+            f"""
+            <div style="
+                background: {bg};
+                color: {txt};
+                padding: 10px 16px;
+                border-radius: 8px;
+                border-left: 4px solid {txt};
+                font-size: 0.92rem;
+                line-height: 1.4;
+                margin-bottom: 0.5rem;
+            ">
+                <strong>{nombre}</strong> {accion_label}.
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    with col_undo:
+        if st.button(
+            "Deshacer",
+            key="undo_visibilidad_btn",
+            use_container_width=True,
+            type="primary",
+        ):
+            from uuid import UUID as _UUID
+
+            archivar_uc = ArchivarDocumento(repo)
+            doc_uuid = _UUID(doc_id_str)
+            try:
+                if tipo == "archivar":
+                    archivar_uc.desarchivar(doc_uuid, actor=user_id)
+                else:
+                    archivar_uc.restaurar_de_papelera(doc_uuid, actor=user_id)
+                st.toast(f"\"{nombre}\" restaurado.", icon="↩️")
+            except Exception as e:
+                st.error(f"No se pudo deshacer: {e}")
+            del st.session_state["undo_visibilidad"]
+            st.rerun()
+    with col_close:
+        if st.button("×", key="undo_visibilidad_close", use_container_width=True, help="Cerrar"):
+            del st.session_state["undo_visibilidad"]
+            st.rerun()
+
+
 def _render_home() -> None:
     """Pantalla de inicio: hero "Continúa…" o 3 CTAs + lista de documentos."""
     header.render(breadcrumbs=None)
 
     repo = DocumentoRepository()
     user_id = "default"  # TODO Fase A.1.c: leer de header Cognito
+
+    # Banner Deshacer (si hay una acción de visibilidad reversible reciente)
+    _render_undo_banner(repo, user_id)
+
     doc_en_progreso = _doc_en_progreso_mas_reciente(repo, user_id)
 
     # Modo hero (hay actividad reciente): título compacto + hero + CTAs secundarios.
@@ -252,6 +332,8 @@ def _render_lista_documentos(repo: DocumentoRepository, user_id: str, *, modo: s
                         help="Oculta este documento de la vista principal sin borrarlo.",
                     ):
                         archivar_uc.archivar(doc.id, actor=user_id)
+                        _set_undo_visibilidad(tipo="archivar", doc_id=doc.id, nombre=nombre)
+                        st.toast(f"\"{nombre}\" archivado.", icon="📦")
                         st.rerun()
                 with col_pap:
                     if st.button(
@@ -261,6 +343,8 @@ def _render_lista_documentos(repo: DocumentoRepository, user_id: str, *, modo: s
                         help="Mueve a papelera. Se purga automáticamente tras 30 días.",
                     ):
                         archivar_uc.enviar_a_papelera(doc.id, actor=user_id)
+                        _set_undo_visibilidad(tipo="papelera", doc_id=doc.id, nombre=nombre)
+                        st.toast(f"\"{nombre}\" movido a papelera.", icon="🗑️")
                         st.rerun()
             elif modo == "papelera":
                 # Indicar días restantes hasta auto-purge
