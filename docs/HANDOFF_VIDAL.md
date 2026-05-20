@@ -155,20 +155,47 @@ Esto es **temporal hasta Cognito real (A.1.c)**. Cuando definamos la mecánica C
 
 **Hoy (dev local):** `allow_origins=["*"]` — abierto para que Next.js dev en cualquier puerto funcione.
 
-**En producción debes:**
+### Tu contexto de deploy (URL interna EC2, IP 172.x.x.x)
+
+Como la app va a vivir dentro de la VPN corporativa de SMNYL y solo será accesible desde IPs internas (`172.x.x.x`), **el riesgo real de CORS baja mucho** — el internet abierto no puede llegar al endpoint. **Pero no se elimina por completo**: un empleado con malware dentro de la VPN, o una página interna comprometida, sigue siendo vector teórico.
+
+**3 opciones para decidir:**
+
+| Opción | Setup | Riesgo | Recomendado para |
+|--------|-------|--------|------------------|
+| **A. Dejar `*` durante piloto** | Cero cambios | Bajo (con VPN como perímetro) | Piloto interno temporal — explicitar la decisión y cerrarlo después |
+| **B. Cerrar al IP específico** | `CORS_ORIGINS=http://172.x.x.x:3000` | Mínimo | Si el IP de la EC2 es estable. Funciona pero el config queda con un número, feo |
+| **C. Hostname interno** | DNS interno o `/etc/hosts` con `documente.smnyl.local` → `172.x.x.x` + `CORS_ORIGINS=https://documente.smnyl.local` | Mínimo | **Recomendado.** Limpio, sobrevive si la EC2 cambia de IP, permite HTTPS con cert interno |
+
+**Mi recomendación:** **Opción C** desde el inicio. Tú decides si el setup del DNS interno + cert es viable rápido; si no, **A** durante piloto y migración a C en sprint 2.
+
+### Implementación cuando decidas
 
 ```python
 # src/api/main.py:55
+import os
+
+CORS_ORIGINS_RAW = os.environ.get("CORS_ORIGINS", "*")
+allow_origins = ["*"] if CORS_ORIGINS_RAW == "*" else CORS_ORIGINS_RAW.split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://documente.smnyl.mx"],  # solo el dominio real
+    allow_origins=allow_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
     allow_headers=["Authorization", "Content-Type"],
 )
 ```
 
-Alternativa más segura: usar variable de entorno `CORS_ORIGINS` para no hardcodear el dominio.
+Y en `.env` de EC2:
+
+```env
+# Piloto:
+CORS_ORIGINS=*
+
+# Cuando decidas cerrar:
+CORS_ORIGINS=https://documente.smnyl.local
+```
 
 ---
 
