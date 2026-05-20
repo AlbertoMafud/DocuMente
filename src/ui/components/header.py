@@ -100,9 +100,7 @@ def render(
     )
 
 
-def _render_breadcrumbs(
-    breadcrumbs: list[str], destinos: list[str | None] | None
-) -> None:
+def _render_breadcrumbs(breadcrumbs: list[str], destinos: list[str | None] | None) -> None:
     """Renderiza cada breadcrumb como botón clickeable o texto plano.
 
     Layout: una fila de columnas que alterna crumb / separador / crumb / …
@@ -190,7 +188,6 @@ def _render_breadcrumbs(
         if i < n - 1:
             with cols[idx + 1]:
                 st.markdown(
-                    f"<span style='color: {muted}; font-size: 0.875rem; "
-                    f"opacity: 0.6;'>/</span>",
+                    f"<span style='color: {muted}; font-size: 0.875rem; opacity: 0.6;'>/</span>",
                     unsafe_allow_html=True,
                 )

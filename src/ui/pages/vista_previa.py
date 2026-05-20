@@ -52,7 +52,7 @@ def _render_seccion(idx: int, seccion: object) -> None:
         st.markdown(seccion.contenido)  # type: ignore[attr-defined]
     else:
         bg = "#fdf6e3"  # tono cálido suave
-        border = SMNYL_COLORS["warning"]
+        border = SMNYL_COLORS["warning_dark"]  # acento más sólido y consistente con tokens AA
         oblig = "obligatoria" if seccion.obligatoria else "opcional"  # type: ignore[attr-defined]
         st.markdown(
             f"""

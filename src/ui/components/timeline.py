@@ -17,18 +17,43 @@ from src.core.models import EventoAuditoria
 from src.core.models.auditoria import TipoEvento
 from src.ui.theme import SMNYL_COLORS
 
-# Mapeo tipo → (color del marcador, etiqueta humana)
-_ESTILO_POR_TIPO: Final[dict[TipoEvento, tuple[str, str]]] = {
-    "documento_creado": (SMNYL_COLORS["primary"], "Documento creado"),
-    "documento_importado": (SMNYL_COLORS["primary"], "Documento importado"),
-    "seccion_editada": (SMNYL_COLORS["success"], "Sección editada"),
-    "seccion_completada": (SMNYL_COLORS["success"], "Sección completada"),
-    "seccion_omitida": (SMNYL_COLORS["text_muted"], "Sección omitida"),
-    "transicion_estado": (SMNYL_COLORS["primary_dark"], "Cambio de estado"),
-    "metadata_actualizada": (SMNYL_COLORS["text_muted"], "Metadata actualizada"),
-    "exportado": (SMNYL_COLORS["info"], "Exportado"),
-    "signoff_reviewer": (SMNYL_COLORS["warning"], "Sign-off Reviewer"),
-    "signoff_fae": (SMNYL_COLORS["warning"], "Sign-off FAE"),
+# Mapeo tipo → (color marcador, color texto del label, etiqueta humana)
+# El marker es UI component (3:1 OK); el label es texto y necesita AA (4.5:1).
+_ESTILO_POR_TIPO: Final[dict[TipoEvento, tuple[str, str, str]]] = {
+    "documento_creado": (SMNYL_COLORS["primary"], SMNYL_COLORS["primary"], "Documento creado"),
+    "documento_importado": (
+        SMNYL_COLORS["primary"],
+        SMNYL_COLORS["primary"],
+        "Documento importado",
+    ),
+    "seccion_editada": (SMNYL_COLORS["success"], SMNYL_COLORS["success_dark"], "Sección editada"),
+    "seccion_completada": (
+        SMNYL_COLORS["success"],
+        SMNYL_COLORS["success_dark"],
+        "Sección completada",
+    ),
+    "seccion_omitida": (
+        SMNYL_COLORS["text_muted"],
+        SMNYL_COLORS["text_muted"],
+        "Sección omitida",
+    ),
+    "transicion_estado": (
+        SMNYL_COLORS["primary_dark"],
+        SMNYL_COLORS["primary_dark"],
+        "Cambio de estado",
+    ),
+    "metadata_actualizada": (
+        SMNYL_COLORS["text_muted"],
+        SMNYL_COLORS["text_muted"],
+        "Metadata actualizada",
+    ),
+    "exportado": (SMNYL_COLORS["info"], SMNYL_COLORS["info_dark"], "Exportado"),
+    "signoff_reviewer": (
+        SMNYL_COLORS["warning"],
+        SMNYL_COLORS["warning_dark"],
+        "Sign-off Reviewer",
+    ),
+    "signoff_fae": (SMNYL_COLORS["warning"], SMNYL_COLORS["warning_dark"], "Sign-off FAE"),
 }
 
 
@@ -65,7 +90,10 @@ def render(eventos: list[EventoAuditoria]) -> None:
 
 def _render_item(evento: EventoAuditoria) -> str:
     """Devuelve el HTML del item en una sola línea para evitar que markdown lo trate como code block."""
-    color, etiqueta = _ESTILO_POR_TIPO.get(evento.tipo, (SMNYL_COLORS["text_muted"], evento.tipo))
+    color_marker, color_label, etiqueta = _ESTILO_POR_TIPO.get(
+        evento.tipo,
+        (SMNYL_COLORS["text_muted"], SMNYL_COLORS["text_muted"], evento.tipo),
+    )
     fecha, hora = _formato_timestamp(evento.timestamp)
     seccion_badge = (
         f"<span class='dm-tl-seccion'>{evento.seccion_id}</span>" if evento.seccion_id else ""
@@ -74,10 +102,10 @@ def _render_item(evento: EventoAuditoria) -> str:
     actor = (evento.actor or "").replace("<", "&lt;").replace(">", "&gt;")
     return (
         f"<div class='dm-tl-item'>"
-        f"<div class='dm-tl-marker' style='background:{color};'></div>"
+        f"<div class='dm-tl-marker' style='background:{color_marker};' aria-hidden='true'></div>"
         f"<div class='dm-tl-content'>"
         f"<div class='dm-tl-header'>"
-        f"<span class='dm-tl-tipo' style='color:{color};'>{etiqueta}</span>"
+        f"<span class='dm-tl-tipo' style='color:{color_label};'>{etiqueta}</span>"
         f"{seccion_badge}"
         f"<span class='dm-tl-time'>{fecha} · {hora}</span>"
         f"</div>"

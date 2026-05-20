@@ -9,8 +9,8 @@ from src.ui.theme import SMNYL_COLORS
 
 _COLORS_POR_SEVERIDAD: dict[Severidad, tuple[str, str, str]] = {
     "alta": (SMNYL_COLORS["danger"], "#fdf2f6", "Crítica"),
-    "media": (SMNYL_COLORS["warning"], "#fdf4ee", "Atención"),
-    "baja": (SMNYL_COLORS["info"], "#eef6fb", "Sugerencia"),
+    "media": (SMNYL_COLORS["warning_dark"], "#fdf4ee", "Atención"),
+    "baja": (SMNYL_COLORS["info_dark"], "#eef6fb", "Sugerencia"),
 }
 
 

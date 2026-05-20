@@ -19,10 +19,13 @@ SMNYL_COLORS: dict[str, str] = {
     "text": "#0a3c53",  # Steel
     "text_muted": "#565656",  # Iron
     "border": "#bdc1c2",  # Quartz
-    "success": "#4b8b7f",  # Medium Pine
-    "warning": "#ce7046",  # Medium Sunset
-    "danger": "#754a62",  # Dark Rose
-    "info": "#2e86af",  # Medium Rain
+    "success": "#4b8b7f",  # Medium Pine — solo backgrounds/iconos (3.96:1 vs blanco, falla AA como texto)
+    "success_dark": "#264640",  # Dark Pine — texto sobre blanco (AAA)
+    "warning": "#ce7046",  # Medium Sunset — solo backgrounds/iconos (3.48:1, falla AA como texto)
+    "warning_dark": "#544235",  # Dark Sunset — texto sobre blanco (AA+)
+    "danger": "#754a62",  # Dark Rose — pasa AA como texto (7.21:1)
+    "info": "#2e86af",  # Medium Rain — solo backgrounds/iconos (4.08:1, falla AA como texto)
+    "info_dark": "#0a385e",  # Dark Rain — texto sobre blanco (igual a primary_dark, AAA)
     "accent_soft": "#b2d4e4",  # Light Rain
 }
 
@@ -73,9 +76,12 @@ def _build_css() -> str:
         --color-text-muted: {c["text_muted"]};
         --color-border: {c["border"]};
         --color-success: {c["success"]};
+        --color-success-dark: {c["success_dark"]};
         --color-warning: {c["warning"]};
+        --color-warning-dark: {c["warning_dark"]};
         --color-danger: {c["danger"]};
         --color-info: {c["info"]};
+        --color-info-dark: {c["info_dark"]};
         --color-accent-soft: {c["accent_soft"]};
 
         --font-display: {f["display"]};
