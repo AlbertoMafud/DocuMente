@@ -2,13 +2,13 @@
 
 > Estado vivo del proyecto. Se lee al iniciar sesión y se actualiza al cerrar si hubo cambios significativos.
 
-**Última actualización:** 2026-05-20 (sesión 14 — cierre: a11y AA + 10 Quick Wins UX + Premium T1 + **rewrite Next.js + FastAPI (F1→F4)** + post-PR fixes (logo cerebro+libro, 404s sidebar, favicon SMNYL, openapi-typescript, HANDOFF §14 paths Cognito/PG/Bedrock, §5 CORS VPN). **23 commits sobre `main`, PR abierto, pusheado a GitHub.**)
+**Última actualización:** 2026-05-20 (sesión 15 — cierre opción A: CORS configurable por env var, fix Unicode em-dash en export DOCX, Playwright E2E happy-path. **3 commits adicionales sobre S14, fast-forward + push a `claude/affectionate-noether-8e038f`**. Tests: 528 pass.)
 
 ---
 
 ## Estado actual
 
-**MVP + Prophet Fase 0 + Fase A + B + C + D.2 (S13) + Remediación UX completa + Rewrite arquitectónico a 3 servicios (S14)** todo en el branch `claude/affectionate-noether-8e038f`. Solo A.1.c (Cognito multi-tenant real) queda bloqueado pendiente reunión Vidal. D.1 (Prophet correctivos + demo MA) pendiente.
+**MVP + Prophet Fase 0 + Fase A + B + C + D.2 (S13) + Remediación UX completa + Rewrite arquitectónico a 3 servicios (S14) + Cierre técnico opción A (S15)** todo en el branch `claude/affectionate-noether-8e038f`. Solo A.1.c (Cognito multi-tenant real) queda bloqueado pendiente reunión Vidal. D.1 (Prophet correctivos + demo MA) pendiente.
 
 **Arquitectura nueva (S14):** la app ahora tiene 3 servicios coexistentes:
 
@@ -22,31 +22,30 @@ Ambos frontends consumen los mismos use cases en `src/core/usecases/`. El domini
 
 **Repo GitHub `AlbertoMafud/DocuMente`:**
 - `main` congelada en `51d845e` (MVP estable — el plan dice que main queda intacta hasta que Vidal valide deploy).
-- **`claude/affectionate-noether-8e038f`** con todo S13+S14 (23 commits sobre main). **PUSHEADO** a `origin/claude/affectionate-noether-8e038f` al cierre de S14.
+- **`claude/affectionate-noether-8e038f`** con todo S13+S14+S15 (26 commits sobre main). **PUSHEADO** a `origin/claude/affectionate-noether-8e038f` al cierre de S15 (último tip: `eedf693`).
 - **PR a main** abierto pendiente — link: `https://github.com/AlbertoMafud/DocuMente/compare/main...claude/affectionate-noether-8e038f` (cuando Alberto haga click en "Create pull request").
-- `feat/remediacion-s13-s16` aún existe en GitHub con el snapshot S13 puro (obsoleto, sin S14).
+- `feat/remediacion-s13-s16` aún existe en GitHub con el snapshot S13 puro (obsoleto, sin S14/S15).
 
-**Tests: 457 pasando** (429 unit + 28 integration smoke de API). Ruff check + format clean. ESLint frontend clean. TypeScript `--noEmit` clean. 0 regresiones.
+**Tests: 528 pasando** (429 unit + 28 integration smoke de API + 70 integration + 1 E2E Playwright). Ruff check + format clean. ESLint frontend clean. TypeScript `--noEmit` clean. 0 regresiones.
 
-**Próximo inmediato (sesión 15) — orden ejecutable:**
+**Próximo inmediato (sesión 16) — orden ejecutable:**
 
-### Bloque opción A aprobada (cierre técnico)
+### Operacional (path inmediato)
 
-1. **Implementar CORS env var** — modificar `src/api/main.py` para leer `CORS_ORIGINS` env var con default `*` (snippet ya documentado en `HANDOFF_VIDAL.md §5`). Vidal solo cambia .env, no código.
-2. **Correr `npm run build`** del frontend para validar producción. Si falla, arreglar antes de seguir.
-3. **Playwright opción B** — instalar `@playwright/test`, configurar `playwright.config.ts`, escribir 1 test happy-path E2E (crear documento → editar sección → exportar). ~1h. Base lista para escalar a 5-8 tests pre-deploy.
-
-### Operacional pendiente
-
-4. **Probar entrevista LLM** localmente: `cp /c/Users/alber/Claude_AI/proyectos/DocuMente/.env .env` y refrescar el backend FastAPI en :8001.
-5. **Compartir con Vidal**: el PR + los 4 docs (`HANDOFF_VIDAL.md`, `ARQUITECTURA.md`, `MIGRATION_TO_EC2.md`, `ARCHIVOS_AUDITORIA.md`). Mensaje sugerido en respuesta de Claude del 2026-05-20.
-6. **Agendar reunión Vidal (30 min)** para resolver decisiones de §8 HANDOFF: Cognito (A.1.c), dominio interno, sunset Streamlit, Bedrock.
+1. **Probar entrevista LLM** localmente: `cp /c/Users/alber/Claude_AI/proyectos/DocuMente/.env .env` y verificar que la entrevista funciona end-to-end en Next.js (puerto 3000) + API (puerto 8001).
+2. **Compartir con Vidal**: el PR + los 4 docs (`HANDOFF_VIDAL.md`, `ARQUITECTURA.md`, `MIGRATION_TO_EC2.md`, `ARCHIVOS_AUDITORIA.md`). El PR ahora trae 3 commits adicionales de S15 (CORS env var listo, fix Unicode export, Playwright como base de testing).
+3. **Agendar reunión Vidal (30 min)** para resolver §8 HANDOFF: Cognito (A.1.c), dominio interno, sunset Streamlit, Bedrock.
 
 ### Estratégico (post-aprobación Vidal)
 
-7. **Merge PR a main**.
-8. **Depuración** según `docs/ARCHIVOS_AUDITORIA.md`.
-9. **D.1.a Template Prophet DOCX** + D.1.c self-service + D.1.d demo MA — destrabe negocio Prophet Fase 1.
+4. **Merge PR a main**.
+5. **Depuración** según `docs/ARCHIVOS_AUDITORIA.md`.
+6. **D.1.a Template Prophet DOCX** + D.1.c self-service + D.1.d demo MA — destrabe negocio Prophet Fase 1.
+
+### Mejoras posibles si hay tiempo
+
+7. **Más tests E2E** — escalar Playwright a 5-8 tests pre-deploy: importar, editar sección persistente, omitir, transición estado MRM, audit trail, descargar versión, apéndice, fallo entrevista 503.
+8. **Limpiar carpeta huérfana** `.claude/worktrees/optimistic-zhukovsky-b7e828/` (cosmético — `git worktree prune` + `rm -rf`).
 
 ---
 
@@ -1019,49 +1018,93 @@ Después de cerrar F4 y los docs, hicimos pulido + push + extensión del HANDOFF
 | Fix 404s sidebar + favicon + openapi-typescript + HANDOFF §14 | ✅ committed `f7f7967` |
 | HANDOFF §5 CORS para deploy VPN interno | ✅ committed `7c323a0` |
 | **Abrir PR a main** | ⏸️ Alberto hace click en el link compare |
-| **Implementar CORS env var** en `src/api/main.py` | ⏸️ Sesión 15 (opción A aprobada) |
-| **`npm run build` validación** | ⏸️ Sesión 15 (opción A aprobada) |
-| **Playwright opción B** (instalar + 1 test happy-path) | ⏸️ Sesión 15 (opción A aprobada) |
+| **Implementar CORS env var** en `src/api/main.py` | ✅ committed `b2203c8` (S15) |
+| **`npm run build` validación** | ✅ S15 — 10 rutas, bundle prod limpio |
+| **Playwright opción B** (instalar + 1 test happy-path) | ✅ committed `eedf693` (S15) — pasa en 4s |
+| **Fix Unicode em-dash en export DOCX** (bug latente descubierto por E2E) | ✅ committed `8f4835a` (S15) |
 | **A.1.c Cognito real** | ⏸️ pendiente reunión Vidal |
 | **D.1 Prophet correctivos + demo MA** | ⏸️ siguiente prioridad de negocio |
 
 ---
 
-## Lo que sigue — sesión 15
+## Progreso de sesión 15 (2026-05-20, tarde — opción A aprobada)
 
-### Path crítico inmediato
+Sesión corta y enfocada: ejecutar los 3 entregables de "opción A" aprobados al cierre de S14 (CORS env var, npm build, Playwright + 1 test E2E). Resultado: completado + un bug latente de Unicode descubierto y arreglado por el propio test E2E.
 
-1. **Validar visualmente** en `localhost:8502`:
-   - Breadcrumb refinado (espaciado clickeable).
-   - Flujos Fase B + C: importar con re-estructuración del ancla, apéndice Excel multi-hoja, PDF como apéndice, fórmula LaTeX, polish de coherencia, editor inline MRM, exportar con versión, historial de versiones, papelera + restaurar.
+### Commits (3 atómicos, fast-forward sobre `0ab8498`)
 
-2. **5 fixes a11y críticos** (~2h, antes de Prophet):
-   - Agregar tokens `success_dark`, `warning_dark`, `info_dark` a `theme.py` (Dark Pine #264640, Dark Sunset #544235, Dark Rain #0a385e).
-   - Refactor de `seccion_card.py`, `gap_badge.py`, `timeline.py`, `vista_previa.py` para usar los tokens dark como TEXTO (mantener los originales para fondos/iconos/borders).
-   - Tests: validar contrast ratios pasan AA con los nuevos tokens.
-   - **Esto desbloquea WCAG 2.1 AA** para piloto formal.
+| Commit | Tipo | Descripción |
+|---|---|---|
+| `b2203c8` | feat(api) | CORS configurable via `CORS_ORIGINS` env var (default `*` dev; tightened `allow_methods`/`allow_headers` a explícitos) |
+| `8f4835a` | fix(api) | Export DOCX falla con Unicode en nombre del modelo — helper `_content_disposition()` con RFC 6266 + 5987 |
+| `eedf693` | test(frontend) | Playwright setup + happy-path E2E (crear → dashboard → exportar DOCX descarga real) |
 
-3. **Top 10 quick wins UX** (decisión: hacerlos antes de Prophet o saltarlos):
-   - Ver lista priorizada en `docs/superpowers/specs/2026-05-19-uiux-pro-max-audit.md` §6.
-   - Estimado total: 25-30h (3-4 días).
-   - Top 5 con mayor ROI: stepper visual, hero "Continúa…", empty states con CTA, dashboard agrupado, "Guardado hace Xs" indicator.
+### Cambios concretos
 
-4. **D.1 Prophet correctivos** (cuando esté listo):
-   - **D.1.a** — Plantilla SMNYL completa de Prophet: 4 loops docxtpl + paleta SMNYL en `src/docs/templates/prophet_model_doc_smnyl.docx`.
-   - **D.1.b** — Botón "Exportar Ficha Prophet" en dashboard cuando `documento.tipo == "prophet"`. Lógica ya existe en `docx_writer_prophet.py`.
-   - **D.1.c** — Mejorar UX self-service de `crear_prophet.py`.
-   - **D.1.d** — Demo con Carmona / Cynthia / Magallanes con feedback estructurado.
-   - **D.1.e** — Decisión go/no-go Prophet Fase 1.
+1. **CORS env var** — `src/api/main.py:14-19, 55-69` + `.env.example`. Lee `CORS_ORIGINS` con default `*`. Vidal solo edita `.env`, no código. Snippet ya documentado en `docs/HANDOFF_VIDAL.md §5`; ahora también está implementado en código.
 
-5. **A.1.c Cognito real con Vidal**:
-   - Compartir los 4 audits + `plans/2026-05-19-migracion-frontend-nextjs.md` con Vidal.
-   - Agendar 30 min para confirmar mecánica Cognito (ALB-header vs JWT-middleware vs Hosted UI).
-   - Implementar A.1.c con la decisión.
+2. **Unicode encoding fix en export DOCX** — `src/api/routers/exportar.py:44-54`. **Bug latente real**: cualquier modelo con nombre tipo "VNB — GMM v2" (em-dash, acentos, ñ, etc.) crasheaba el export con HTTP 400 (`UnicodeEncodeError` en latin-1). Descubierto cuando el E2E corrió con nombre "E2E Test — N". Fix aplicado a `/exportar` (MRM) y `/exportar/prophet`.
 
-### Pendientes menores
+3. **Playwright E2E starter** — `frontend/e2e/crear-y-exportar.spec.ts` + `frontend/playwright.config.ts`. Stack:
+   - Dual webServer en `playwright.config.ts`: uvicorn `:8100` + Next.js `:3100` (puertos aislados para no chocar con dev local del usuario, que típicamente tiene servers en 3000-3002 y 8001).
+   - `NEXT_PUBLIC_API_URL` override en `env` del webServer frontend → apunta al backend del E2E, no al dev local.
+   - Scripts npm: `test:e2e` y `test:e2e:ui`.
+   - Test cubre: navegar /documentos/crear → POST /documentos (form submission con TanStack Query) → redirect a /documentos/{uuid} → GET doc + brechas → POST /exportar → descarga DOCX validada.
+   - Listener `page.on("response")` para capturar 4xx/5xx — útil para diagnóstico en CI.
+   - Pasa en ~4s end-to-end.
 
-- Borrar carpeta huérfana `.claude/worktrees/cool-wing-eca24c` (cosmético).
-- Validación visual S10 quedó pendiente desde S11 — checklist en `pending_validation_items.md`.
+### Validaciones al cierre
+
+| Check | Resultado |
+|---|---|
+| pytest full suite | 499 pass / 7 fail (fixtures `SMNYL/Ejemplos actuales/*.docx` no copiados al worktree — esperado, no regresión) |
+| pytest API smoke | 28/28 ✅ |
+| Ruff lint + format (mi código) | clean ✅ |
+| TypeScript `tsc --noEmit` | clean ✅ |
+| ESLint frontend | clean ✅ |
+| `npm run build` | 10 rutas (5 estáticas + 5 dinámicas), bundle prod limpio ✅ |
+| Playwright E2E | 1/1 pasa, 4.0s ✅ |
+
+### Estado git al cierre
+
+- Branch `claude/affectionate-noether-8e038f` ahora en `eedf693` (de `0ab8498`, +3 commits S15).
+- **Pusheado** a `origin/claude/affectionate-noether-8e038f`. PR link sigue siendo el mismo: https://github.com/AlbertoMafud/DocuMente/compare/main...claude/affectionate-noether-8e038f
+- Branch huérfano `claude/optimistic-zhukovsky-b7e828` (creado automáticamente por el harness al iniciar el worktree S15) **borrado local**. No existe en GitHub.
+- Worktree `optimistic-zhukovsky-b7e828` removido de git pero la **carpeta física huérfana** sigue en disco (Windows file lock por el shell del harness en sesión activa). Se borra al cerrar la sesión con `git worktree prune` + `rm -rf .claude/worktrees/optimistic-zhukovsky-b7e828`.
+
+### Decisiones tomadas en S15
+
+1. **Worktrees + branches del harness** — al iniciar un worktree, el harness crea automáticamente un branch nuevo para aislar. Para evitar acumular branches huérfanos al cierre, hacer **fast-forward al branch padre** (origen del worktree) en lugar de mergear/PR. Aplica para futuras sesiones que usen worktree.
+2. **Puertos aislados para E2E** — Playwright usa `:8100/:3100` en vez de `:8001/:3000` para no colisionar con servers dev locales del usuario. Forzado con `next dev -p 3100` (sin esto, Next cae a 3001/3002 silenciosamente y Playwright queda esperando un puerto que nunca se levanta).
+3. **`python -m uvicorn`** en lugar de `uvicorn` directo en `playwright.config.ts.webServer` — no asume uvicorn en PATH del shell de Playwright.
+
+### Gotchas técnicos
+
+- **Backend stale en background**: si arrancas uvicorn manualmente para debug (curl) y se queda corriendo, Playwright lo reusa por `reuseExistingServer: true` y enmascara fixes recientes. Matarlo antes de re-correr el test.
+- **`git worktree remove` en Windows** falla con "Permission denied" si el shell está parado dentro del worktree. Necesitas cerrar la sesión o cambiar de cwd primero.
+- **Em-dash en nombres de modelo**: AHORA SÍ funciona en export. Antes era un bug latente que nadie había notado porque los tests usaban ASCII.
+
+---
+
+## Lo que sigue — sesión 16
+
+### Operacional (path inmediato post-S15)
+
+1. **Probar entrevista LLM** localmente end-to-end en Next.js: `cp /c/Users/alber/Claude_AI/proyectos/DocuMente/.env .env` (el worktree no hereda el `.env` gitignored). Verificar que la entrevista funciona en :3000 contra API :8001.
+2. **Compartir con Vidal**: el PR + los 4 docs (`HANDOFF_VIDAL.md`, `ARQUITECTURA.md`, `MIGRATION_TO_EC2.md`, `ARCHIVOS_AUDITORIA.md`). El PR ahora trae 3 commits adicionales de S15 — recordar mencionar a Vidal que el CORS env var ya está implementado (no solo documentado) y que el flujo crear→export tiene cobertura E2E.
+3. **Agendar reunión Vidal (30 min)** para resolver §8 HANDOFF: Cognito (A.1.c), dominio interno, sunset Streamlit, Bedrock.
+
+### Estratégico (post-aprobación Vidal)
+
+4. **Merge PR a main** una vez Vidal apruebe el deploy.
+5. **Depuración post-merge** según `docs/ARCHIVOS_AUDITORIA.md`.
+6. **D.1.a Template Prophet DOCX** + D.1.c self-service + D.1.d demo MA — destrabe negocio Prophet Fase 1.
+
+### Mejoras técnicas posibles si hay tiempo
+
+7. **Escalar suite Playwright a 5-8 tests pre-deploy**: importar documento, editar sección con persistencia, omitir sección con motivo, transición de estado MRM, audit trail validation, descargar versión, apéndice con archivo adjunto, fallo en entrevista LLM 503.
+8. **Limpiar carpeta huérfana** `.claude/worktrees/optimistic-zhukovsky-b7e828/` (cosmético; cuando el shell ya no esté parado ahí).
+9. Validación visual S10 quedó pendiente desde S11 — checklist en `pending_validation_items.md`. Probablemente obsoleta a estas alturas (post-rewrite).
 
 ### Bloqueos vigentes
 
@@ -1070,18 +1113,17 @@ Después de cerrar F4 y los docs, hicimos pulido + push + extensión del HANDOFF
 - **Pulido formal de plantilla MRM `.docx`** — diferido hasta antes de demo externa.
 - **Bedrock vs Anthropic** — Vidal aceptó hacerlo con Bedrock directo. Cuando llegue el momento de deploy, swap del adaptador en `src/llm/`.
 
-### Decisiones tomadas en S13 (continuación)
+### Decisiones de fondo todavía vigentes (S13/S14)
 
-- **Fase D order invertido**: D.2 (frontend audit) ANTES de D.1 (Prophet). Razón: la auditoría aplica a TODO incluyendo Prophet, evita re-trabajo.
-- **D.2 cierre**: solo audits + plan dedicado. La ejecución de la migración Next.js es un plan separado de ~5 semanas, no se inicia en S14.
-- **Refined Minimalism + Bento Grid** como estilo objetivo post-migración (no glassmorphism ni brutalismo).
-- **Typography pair confirmada**: Georgia (display, brand) + Inter (body, moderno) + JetBrains Mono (código). Mantiene marca con Tahoma como fallback.
+- **Fase D order invertido**: D.2 (frontend audit) ANTES de D.1 (Prophet). La auditoría aplica a TODO incluyendo Prophet.
+- **Refined Minimalism + Bento Grid** como estilo objetivo post-migración (Next.js premium ya lo refleja).
+- **Stack frontend**: Next.js 14 App Router + Tailwind + shadcn/ui + TanStack Query + Sonner + Framer Motion + Lucide. SVG inline para logo.
 
-### Reglas de oro vigentes (no cambian)
+### Reglas de oro vigentes
 
 1. `main` queda en `51d845e` — no merge hasta que Vidal valide deploy.
-2. Todo el trabajo vive en `feat/remediacion-s13-s16` con sub-ramas por fase.
-3. Changelog técnico `docs/Migracion EC2/CHANGELOG_TECNICO_VIDAL.md` se actualiza al cerrar cada fase.
-4. TDD obligatorio. Baseline al cierre de S13 = 386 tests passing.
-5. Schema migrations SOLO aditivas, idempotentes al boot.
-6. NUNCA borrar el avance del usuario. Backup antes de cambios arriesgados a BD.
+2. Todo el trabajo vive en `claude/affectionate-noether-8e038f` (S13+S14+S15 acumulado).
+3. TDD obligatorio. **Baseline al cierre de S15 = 528 tests passing** (incluye 1 E2E Playwright).
+4. Schema migrations SOLO aditivas, idempotentes al boot.
+5. NUNCA borrar el avance del usuario. Backup antes de cambios arriesgados a BD.
+6. **Cualquier worktree nuevo se hace fast-forward al branch padre al cierre** (S15 aprendido — evita acumular branches huérfanos).
