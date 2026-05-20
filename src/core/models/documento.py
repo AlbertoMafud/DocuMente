@@ -132,6 +132,20 @@ class Documento(BaseModel):
         return completas / len(oblig)
 
     @property
+    def cobertura_catalogo(self) -> float:
+        """Porcentaje de secciones del template con contenido detectado (0.0 a 1.0).
+
+        Diferente de `porcentaje_completitud` (que solo cuenta secciones obligatorias
+        en estado 'completa'). Esta métrica cuenta TODAS las secciones que tengan
+        cualquier contenido — útil para detectar si una importación poblo bien la
+        estructura del template, independiente de la severidad MRM.
+        """
+        if not self.secciones:
+            return 0.0
+        con_contenido = sum(1 for s in self.secciones if s.contenido and s.contenido.strip())
+        return con_contenido / len(self.secciones)
+
+    @property
     def porcentaje_resuelto(self) -> float:
         """Porcentaje de secciones obligatorias resueltas (completa + omitida).
 

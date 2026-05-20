@@ -74,7 +74,17 @@ def leer_csv(ruta: Path) -> TablaLeida:
 
 def leer_excel(ruta: Path, hoja: str | int = 0) -> TablaLeida:
     df = pd.read_excel(ruta, sheet_name=hoja, engine="openpyxl")
-    nombre_hoja = hoja if isinstance(hoja, str) else f"Hoja{hoja + 1}"
+    if isinstance(hoja, str):
+        nombre_hoja = hoja
+    else:
+        # Si pasó int, recuperamos el nombre real desde openpyxl para no
+        # mostrar "Hoja1" en el apéndice cuando la hoja se llama "Supuestos".
+        try:
+            with pd.ExcelFile(ruta, engine="openpyxl") as xf:
+                nombres = list(xf.sheet_names)
+            nombre_hoja = nombres[hoja] if 0 <= hoja < len(nombres) else f"Hoja{hoja + 1}"
+        except Exception:
+            nombre_hoja = f"Hoja{hoja + 1}"
     return TablaLeida(
         nombre_archivo=ruta.name,
         nombre_hoja=nombre_hoja,
@@ -87,11 +97,61 @@ def leer_excel(ruta: Path, hoja: str | int = 0) -> TablaLeida:
     )
 
 
+def leer_excel_todas_hojas(ruta: Path) -> list[TablaLeida]:
+    """Lee TODAS las hojas de un Excel, una `TablaLeida` por hoja.
+
+    Hojas completamente vacías (sin filas con datos) se omiten para no
+    crear apéndices basura. Devuelve [] si todas las hojas están vacías.
+    """
+    with pd.ExcelFile(ruta, engine="openpyxl") as xf:
+        nombres = list(xf.sheet_names)
+
+    resultados: list[TablaLeida] = []
+    for nombre in nombres:
+        try:
+            df = pd.read_excel(ruta, sheet_name=nombre, engine="openpyxl")
+        except Exception:
+            # Hoja con error de parseo (ej. solo header sin datos) — saltar
+            continue
+        if df.empty:
+            continue
+        resultados.append(
+            TablaLeida(
+                nombre_archivo=ruta.name,
+                nombre_hoja=nombre,
+                n_filas=len(df),
+                n_columnas=len(df.columns),
+                headers=[str(c) for c in df.columns],
+                primeras_filas_md=_df_a_markdown_safe(df, max_rows=5),
+                tabla_completa_md=_df_a_markdown_safe(df),
+                resumen_estadistico=_resumen_de_df(df),
+            )
+        )
+    return resultados
+
+
 def leer_tabla(ruta: Path) -> TablaLeida:
-    """Lee un archivo .xlsx, .xls o .csv. Detección por extensión."""
+    """Lee un archivo .xlsx, .xls o .csv (solo primera hoja para Excel).
+
+    Para Excel multi-hoja, prefiere `leer_tabla_todas(ruta)`.
+    """
     extension = ruta.suffix.lower()
     if extension in (".xlsx", ".xls"):
         return leer_excel(ruta)
     if extension == ".csv":
         return leer_csv(ruta)
+    raise ValueError(f"Formato no soportado: {extension}. Usar .xlsx, .xls o .csv.")
+
+
+def leer_tabla_todas(ruta: Path) -> list[TablaLeida]:
+    """Lee TODAS las hojas (Excel) o la tabla única (CSV) y devuelve lista.
+
+    Caso de uso: el usuario sube un Excel con varias hojas y queremos crear
+    un apéndice por hoja (B.3). Para CSV devuelve lista de 1 elemento.
+    """
+    extension = ruta.suffix.lower()
+    if extension in (".xlsx", ".xls"):
+        return leer_excel_todas_hojas(ruta)
+    if extension == ".csv":
+        return [leer_csv(ruta)]
     raise ValueError(f"Formato no soportado: {extension}. Usar .xlsx, .xls o .csv.")

@@ -110,6 +110,35 @@ def _dialog_exportar_docx(documento_id_str: str) -> None:
             "dentro de prosa en español). No dispara llamadas LLM de traducción."
         )
 
+    st.markdown("---")
+    polish_activo = st.checkbox(
+        "Revisar coherencia narrativa con IA antes de exportar",
+        key=f"export_polish_{documento_id_str}",
+        help=(
+            "Claude lee el documento completo y reporta inconsistencias entre "
+            "secciones (cifras distintas, contradicciones, referencias rotas, "
+            "tono dissonante). Costo aprox. $0.02–0.05 USD. Las sugerencias "
+            "se muestran en pantalla — NO modifican el .docx automáticamente."
+        ),
+    )
+    crear_version_activo = st.checkbox(
+        "Crear nueva versión al exportar",
+        key=f"export_version_{documento_id_str}",
+        value=False,
+        help=(
+            "Guarda un snapshot inmutable del documento (con número, hash y "
+            "comentario). Útil para recuperar estados previos o comparar diffs. "
+            "Si exportas dos veces sin editar, no se duplica."
+        ),
+    )
+    comentario_version = ""
+    if crear_version_activo:
+        comentario_version = st.text_input(
+            "Comentario de la versión (opcional)",
+            placeholder="Ej. Cierre Q2 — supuestos actualizados",
+            key=f"export_version_comment_{documento_id_str}",
+        )
+
     col_cancel, col_go = st.columns(2)
     if col_cancel.button(
         "Cancelar", use_container_width=True, key=f"export_cancel_{documento_id_str}"
@@ -125,6 +154,25 @@ def _dialog_exportar_docx(documento_id_str: str) -> None:
         if not _TEMPLATE_PATH.exists():
             st.error(f"Plantilla maestra no encontrada en {_TEMPLATE_PATH}.")
             return
+        # Si polish activo, ejecutar primero y guardar resultado para mostrar
+        if polish_activo:
+            try:
+                with st.spinner("Revisando coherencia narrativa con Claude…"):
+                    from src.core.usecases import DocumentPolisher
+
+                    repo = DocumentoRepository()
+                    documento = repo.obtener(doc_id)
+                    llm = AnthropicClient()
+                    if documento is not None:
+                        resultado_polish = DocumentPolisher(llm).revisar(documento)
+                        # Persistir métricas (el polisher acumuló costo)
+                        repo.guardar(documento)
+                        st.session_state[f"polish_resultado_{documento_id_str}"] = resultado_polish
+            except Exception as e:
+                st.warning(
+                    f"La revisión de coherencia falló ({e.__class__.__name__}). "
+                    "Continuando con el export sin sugerencias."
+                )
         try:
             if idioma in ("es_normalize", "en_normalize"):
                 spinner_msg = "Detectando idiomas, traduciendo y generando DOCX…"
@@ -135,6 +183,13 @@ def _dialog_exportar_docx(documento_id_str: str) -> None:
                     doc_id,
                     actor="default",
                     idioma_objetivo=idioma,  # type: ignore[arg-type]
+                    crear_version=crear_version_activo,
+                    comentario_version=comentario_version,
+                )
+            if resultado.version is not None and not resultado.version.es_duplicado:
+                st.toast(
+                    f"Versión v{resultado.version.version.numero} creada.",
+                    icon="🔖",
                 )
             st.session_state[bytes_key] = resultado.contenido
             st.session_state[nombre_key] = resultado.nombre_archivo
@@ -496,11 +551,132 @@ def _render_gobernanza(documento: Documento) -> None:
 
         st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
 
+        # Resultado del DocumentPolisher si se ejecutó en el último export (B.2)
+        _render_polish_resultado(doc_id_str)
+
+        # Historial de versiones (C.2)
+        _render_historial_versiones(documento.id)
+
         # Sign-offs si aplican al estado actual
         _render_signoffs(documento)
 
         # Acciones de transición
         _render_acciones_estado(documento, sm)
+
+
+def _render_historial_versiones(documento_id) -> None:  # type: ignore[no-untyped-def]
+    """Muestra timeline de versiones del documento (C.2)."""
+    from src.storage.repositories import VersionRepository
+
+    versiones = VersionRepository().listar_por_documento(documento_id)
+    if not versiones:
+        return
+
+    n = len(versiones)
+    header = f"🔖 Historial de versiones ({n})"
+    with st.expander(header, expanded=False):
+        st.caption(
+            "Cada export con la opción 'Crear nueva versión' guarda un snapshot "
+            "inmutable. Si exportas el mismo estado dos veces no se duplica."
+        )
+        for v in reversed(versiones):  # más reciente arriba
+            with st.container(border=True):
+                col_info, col_meta = st.columns([3, 2])
+                with col_info:
+                    titulo = f"**v{v.numero}**"
+                    if v.comentario:
+                        titulo += f" — {v.comentario}"
+                    st.markdown(titulo)
+                    st.caption(
+                        f"Hash: `{v.hash_contenido[:12]}…` · "
+                        f"{len(v.snapshot_json):,} bytes de snapshot"
+                    )
+                with col_meta:
+                    st.caption(v.creado_en.strftime("%Y-%m-%d %H:%M"))
+
+
+def _render_polish_resultado(doc_id_str: str) -> None:
+    """Muestra las sugerencias del DocumentPolisher (si las hay en session_state).
+
+    Las sugerencias se generan en el modal de export cuando el toggle "Revisar
+    coherencia" está activo. Se renderean aquí (no en el modal) porque pueden
+    ser muchas y necesitan un expander con scroll.
+    """
+    key = f"polish_resultado_{doc_id_str}"
+    resultado = st.session_state.get(key)
+    if resultado is None:
+        return
+    if not resultado.ejecutado:
+        return
+
+    n_alta = resultado.n_alta
+    n_media = resultado.n_media
+    n_baja = resultado.n_baja
+    total = len(resultado.sugerencias)
+
+    if total == 0 and not resultado.hubo_errores:
+        with st.expander("✅ Revisión de coherencia: sin observaciones", expanded=False):
+            st.caption(
+                "Claude revisó el documento completo y no detectó inconsistencias, "
+                "contradicciones, referencias rotas ni problemas de redacción "
+                "cross-seccional. Última corrida vinculada al export más reciente."
+            )
+        return
+
+    if resultado.hubo_errores:
+        with st.expander("⚠️ Revisión de coherencia: falló", expanded=False):
+            for err in resultado.errores:
+                st.caption(err)
+        return
+
+    header = f"📝 Revisión de coherencia: {total} observación(es)"
+    if n_alta:
+        header += f" · {n_alta} alta"
+    if n_media:
+        header += f" · {n_media} media"
+    if n_baja:
+        header += f" · {n_baja} baja"
+
+    with st.expander(header, expanded=n_alta > 0):
+        st.caption(
+            "Las sugerencias NO se aplicaron al DOCX automáticamente. Edita "
+            "manualmente las secciones afectadas y vuelve a exportar si quieres "
+            "reflejar los cambios."
+        )
+        colores = {
+            "alta": SMNYL_COLORS["danger"],
+            "media": SMNYL_COLORS["warning"],
+            "baja": SMNYL_COLORS["text_muted"],
+        }
+        for sug in resultado.sugerencias:
+            color = colores.get(sug.severidad, SMNYL_COLORS["text_muted"])
+            secciones_str = ", ".join(sug.secciones_afectadas)
+            st.markdown(
+                f"""
+                <div style="
+                    border-left: 3px solid {color};
+                    padding: 8px 12px;
+                    margin: 8px 0;
+                    background-color: {SMNYL_COLORS["bg_soft"]};
+                    border-radius: 4px;
+                ">
+                    <div style="font-weight: 600; color: {color}; font-size: 0.85rem;
+                        text-transform: uppercase; letter-spacing: 0.04em;">
+                        {sug.severidad} · {sug.tipo.replace("_", " ")}
+                    </div>
+                    <div style="margin-top: 4px; color: {SMNYL_COLORS["text"]};">
+                        {sug.descripcion}
+                    </div>
+                    <div style="margin-top: 4px; font-size: 0.8rem;
+                        color: {SMNYL_COLORS["text_muted"]};">
+                        Secciones: <code>{secciones_str}</code>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            if sug.texto_sugerido:
+                st.caption(f"Sugerencia: {sug.texto_sugerido}")
 
 
 def _render_signoffs(documento: Documento) -> None:

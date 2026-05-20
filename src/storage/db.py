@@ -82,6 +82,20 @@ class EstadoEntrevistaRow(Base):
     actualizada_en: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
 
 
+class VersionRow(Base):
+    """Tabla de versiones (snapshots inmutables del Documento) — Fase C.2."""
+
+    __tablename__ = "versiones"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    documento_id: Mapped[str] = mapped_column(String(36), index=True)
+    numero: Mapped[int] = mapped_column(default=1)
+    snapshot_json: Mapped[str] = mapped_column(Text, nullable=False)
+    hash_contenido: Mapped[str] = mapped_column(String(64), index=True)
+    comentario: Mapped[str] = mapped_column(Text, default="")
+    creado_en: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
+
+
 _engine = None
 _SessionLocal: sessionmaker[Session] | None = None
 

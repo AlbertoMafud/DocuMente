@@ -20,6 +20,7 @@ from src.ui.pages import (
     crear_nuevo,
     crear_prophet,
     dashboard,
+    editar_seccion_mrm,
     editar_seccion_prophet,
     entrevista,
     importar,
@@ -231,6 +232,8 @@ def main() -> None:
         crear_prophet.render()
     elif pagina == "editar_seccion_prophet":
         editar_seccion_prophet.render()
+    elif pagina == "editar_seccion_mrm":
+        editar_seccion_mrm.render()
     else:
         st.error(f"Página desconocida: {pagina}")
         st.session_state["pagina"] = "home"

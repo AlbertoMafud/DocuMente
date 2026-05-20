@@ -19,8 +19,13 @@ from uuid import UUID
 
 from sqlalchemy import select
 
-from src.core.models import Documento, EstadoEntrevista
-from src.storage.db import DocumentoRow, EstadoEntrevistaRow, session_scope
+from src.core.models import Documento, EstadoEntrevista, Version
+from src.storage.db import (
+    DocumentoRow,
+    EstadoEntrevistaRow,
+    VersionRow,
+    session_scope,
+)
 
 
 class DocumentoRepository:
@@ -176,3 +181,78 @@ class EstadoEntrevistaRepository:
                 return False
             s.delete(row)
             return True
+
+
+class VersionRepository:
+    """Persistencia de versiones (snapshots inmutables) — Fase C.2."""
+
+    def crear(self, version: Version) -> None:
+        """Inserta una versión. Las versiones son inmutables — no hay update."""
+        with session_scope() as s:
+            s.add(
+                VersionRow(
+                    id=str(version.id),
+                    documento_id=str(version.documento_id),
+                    numero=version.numero,
+                    snapshot_json=version.snapshot_json,
+                    hash_contenido=version.hash_contenido,
+                    comentario=version.comentario,
+                    creado_en=version.creado_en,
+                )
+            )
+
+    def obtener(self, version_id: UUID) -> Version | None:
+        with session_scope() as s:
+            row = s.get(VersionRow, str(version_id))
+            if row is None:
+                return None
+            return Version(
+                id=UUID(row.id),
+                documento_id=UUID(row.documento_id),
+                numero=row.numero,
+                snapshot_json=row.snapshot_json,
+                hash_contenido=row.hash_contenido,
+                comentario=row.comentario,
+                creado_en=row.creado_en,
+            )
+
+    def listar_por_documento(self, documento_id: UUID) -> list[Version]:
+        """Devuelve versiones ordenadas por número ascendente (v1, v2, …)."""
+        with session_scope() as s:
+            stmt = (
+                select(VersionRow)
+                .where(VersionRow.documento_id == str(documento_id))
+                .order_by(VersionRow.numero.asc())
+            )
+            rows = s.execute(stmt).scalars().all()
+            return [
+                Version(
+                    id=UUID(r.id),
+                    documento_id=UUID(r.documento_id),
+                    numero=r.numero,
+                    snapshot_json=r.snapshot_json,
+                    hash_contenido=r.hash_contenido,
+                    comentario=r.comentario,
+                    creado_en=r.creado_en,
+                )
+                for r in rows
+            ]
+
+    def proximo_numero(self, documento_id: UUID) -> int:
+        """Devuelve el próximo número de versión a usar para este documento.
+
+        Si no hay versiones previas → 1. Si hay vN → N+1.
+        """
+        with session_scope() as s:
+            stmt = (
+                select(VersionRow.numero)
+                .where(VersionRow.documento_id == str(documento_id))
+                .order_by(VersionRow.numero.desc())
+                .limit(1)
+            )
+            ultimo = s.execute(stmt).scalar_one_or_none()
+            return (ultimo or 0) + 1
+
+    def ultima_version(self, documento_id: UUID) -> Version | None:
+        versiones = self.listar_por_documento(documento_id)
+        return versiones[-1] if versiones else None

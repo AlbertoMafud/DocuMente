@@ -30,6 +30,9 @@ TipoEvento = Literal[
     "restaurado_de_papelera",
     "eliminado_permanente",
     "purgado_automatico",
+    # Versionado (Fase C.2):
+    "version_creada",
+    "version_restaurada",
 ]
 
 

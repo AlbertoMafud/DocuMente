@@ -2,17 +2,26 @@
 
 > Estado vivo del proyecto. Se lee al iniciar sesión y se actualiza al cerrar si hubo cambios significativos.
 
-**Última actualización:** 2026-05-18 (sesión 12 — push a GitHub, reunión Vidal, fixes locales)
+**Última actualización:** 2026-05-19 (sesión 13 marathón — Fase A + B + C completas, D.2 auditoría frontend cerrada, 4 audits + plan de migración Next.js escrito, breadcrumb clickeable, app validada en localhost:8502)
 
 ---
 
 ## Estado actual
 
-**Fases 0-4 + Fase 3 + Fase 6 ✅ completas + features "crear desde cero" (S9) + v2.10 mejoras (S10) + Prophet Fase 0 (S11) ✅.** Solo falta Fase 5 (pulido UX final).
+**MVP + Prophet Fase 0 + Fase A + Fase B + Fase C + D.2 del plan de remediación S13→S16 completas.** Solo A.1.c (Cognito multi-tenant real) queda bloqueado pendiente reunión Vidal. D.1 (Prophet correctivos + demo MA) pendiente.
 
-**MVP cerrado + módulo Prophet Fase 0 implementado.** Repo GitHub `AlbertoMafud/DocuMente` en `8d64520` (todo pusheado incluyendo S10 + S11 + limpieza de S12). **263 tests pasando**, ruff/format clean.
+**Repo GitHub `AlbertoMafud/DocuMente`:**
+- `main` congelada en `51d845e` (MVP estable, sin cambios — el plan dice que main queda intacta hasta que Vidal valide deploy).
+- `feat/remediacion-s13-s16` con todo el trabajo de S13. Última subida: pendiente al cierre de S13 (hay commit local + push después de actualizar status).
 
-**Próximo:** Template DOCX Prophet completo (diseño SMNYL + loops) → demo con Carmona/Cynthia/Magallanes → seguimiento con Vidal para EC2 → Fase Prophet-1 solo si demo es positiva.
+**Tests: 386+ pasando** (de 263 baseline al inicio de S13 → +123 nuevos en la sesión 13 entera), ruff check + format clean, 0 regresiones.
+
+**Próximo inmediato (sesión 14):**
+1. **Validación visual de breadcrumb** y demás features Fase B+C en `localhost:8502`.
+2. **5 fixes a11y críticos** (~2h): agregar tokens `success_dark`, `warning_dark`, `info_dark` al theme y refactor de seccion_card, gap_badge, timeline. **Resuelve los 5 críticos WCAG AA** del audit de a11y.
+3. **Top 10 quick wins UX** (~3-4 días, opcional antes de Prophet) — ver `docs/superpowers/specs/2026-05-19-uiux-pro-max-audit.md` §6.
+4. **D.1 Prophet correctivos**: template SMNYL completo + botón "Exportar Ficha Prophet" + demo Carmona/Cynthia/Magallanes.
+5. **Compartir audits + plan Next.js con Vidal** y agendar reunión A.1.a para resolver Cognito.
 
 ---
 
@@ -572,3 +581,359 @@ Se ejecutó el plan `docs/superpowers/plans/2026-05-14-prophet-fase0.md` vía Su
 - **Prophet Fase 1** — NO arrancar sin feedback positivo de la demo con MA.
 - **Pulido formal de plantilla MRM** — diferido hasta antes de demo externa.
 - **EC2 con Vidal** — en progreso; Vidal tiene el repo y el runbook.
+
+---
+
+## Progreso de sesión 13 (2026-05-19)
+
+### Contexto
+
+Alberto trajo 12 comentarios acumulados de pláticas con usuarios reales (Inversiones, MA, Riesgos, testers en EC2). Durante la sesión sumó 2 ítems más:
+- **#13:** archivado/historial de docs en home (con tiempo se llena).
+- **#14:** changelog técnico para Vidal + estrategia de branching (`main` congelada hasta que Vidal valide).
+
+Plan de remediación completo escrito y aprobado: `C:\Users\alber\.claude\plans\ya-tengo-varios-comentarios-hidden-grove.md` (14 ítems en 4 fases S13 → S16+).
+
+### Decisiones clave del plan (confirmadas por Alberto)
+
+| Decisión | Resolución |
+|---|---|
+| Estructura | Plan integral por fases S13→S16 |
+| Frontend (#5) | Auditoría + plan dedicado para migración Next.js + shadcn/cult-ui (Streamlit no escala visualmente) |
+| Cognito (#8) | Mecánica a confirmar con Vidal; plan describe 2 ramas (ALB-header vs JWT-middleware) + password-gate de emergencia |
+| Prophet (#4) | Unidad = una ficha por modelo; usuarios capturan directo; matriz integrada en ficha |
+| Branching | `main` congelada en `51d845e`; todo S13 vive en `feat/remediacion-s13-s16` |
+
+### Fase A implementada (5 de 6 sub-tareas)
+
+**A.1.b — Password-gate de emergencia ✅**
+- Nuevo `src/ui/components/auth_gate.py`. Lee `DOCUMENTE_GATE_PASSWORD` del env; si está set, pide password antes del router. Si está unset/vacío → gate desactivado (modo dev).
+- Banner pequeño en header indica modo activo. 11 tests.
+
+**A.2 — Onboarding nunca silenciosamente se pierde ✅**
+- Reemplazo de `contextlib.suppress(Exception)` por `try/except` con logging explícito en `SugerenciasMultiFuente`, `AplicarBrief`, `CrearDocumentoEnBlanco`, `ImportarDocumento`.
+- Nuevos dataclasses `ResultadoSugerencias`, `ResultadoBrief`, `ResultadoCrearDocumento` con conteos + errores + advertencias.
+- `crear_nuevo.py` e `importar.py` validan que `AnthropicClient()` se construyó OK y muestran warning prominente si no.
+- `brief_inicial.py` ya NO redirige silencioso si LLM falla: muestra opciones "Reintentar" / "Continuar sin borradores", preserva respuestas en session_state.
+- Nuevo componente `onboarding_banner.py` que se renderea en el dashboard tras navegar de onboarding/importar/brief; consume el resultado del session_state (solo se ve una vez). Conteo total = sugerencias multifuente + brief. Lista advertencias en expander.
+- 14 tests nuevos (sugerencias error path, brief error path, banner render, crear sin LLM, etc.).
+
+**A.3 — Idioma normaliza ES/EN + opción bilingüe ✅**
+- `traductor.py` ahora soporta 5 modos: `es` y `en` (legacy preservados sin cambios) + `es_normalize`, `en_normalize`, `bilingue` (nuevos).
+- Detector de idioma por sección con Haiku (tarea `extraction`, ~1 prompt por bloque) + fallback a "mixed" si crashea (fuerza traducción para no ocultar contenido).
+- Nuevo `src/llm/prompts/traduccion.py` con prompts en EN y ES + prompt de detección.
+- `exportar_documento.py` propaga los 5 modos al writer; nombre del archivo y metadata de audit reflejan `modo_idioma` + `idioma_escritura`.
+- UI `_dialog_exportar_docx` ahora tiene radio con 3 opciones + caption explicando costo y comportamiento de cada una.
+- 7 tests nuevos.
+
+**A.4 — PDF como ancla en "Mejorar documento" ✅**
+- Nuevo `src/docs/readers/anchor_reader.py` factory que despacha .docx → `DocxReader` legacy; .pdf → `PdfAnchorReader` nuevo.
+- `PdfAnchorReader` extrae texto plano con pypdf, recorre línea por línea con heurística: numeración tipo "4.4 ", todo-mayúsculas, title-case (≤10 palabras). Usa la misma `_coincide_con_catalogo()` del DocxReader.
+- Si no detecta ninguna sección del catálogo NYL → guarda todo el PDF como `FuenteContexto` para que `SugerenciasMultiFuente` lo procese.
+- `importar.py` UI acepta `.docx` o `.pdf`; muestra `st.info` aclarando que la extracción PDF es menos precisa.
+- 12 tests nuevos.
+
+**A.5 — Archivado, papelera y job de purge ✅**
+- Modelo `Documento` extendido con `archivado: bool`, `en_papelera: bool`, `archivado_en: datetime | None`. Propiedad derivada `visibilidad` (`activo` / `archivado` / `papelera`).
+- `EventoAuditoria.tipo` extendido con 6 nuevos tipos (backward-compatible): `archivado`, `desarchivado`, `enviado_a_papelera`, `restaurado_de_papelera`, `eliminado_permanente`, `purgado_automatico`.
+- `db.py`: columnas nuevas + función `_aplicar_migraciones_aditivas(engine)` que corre al boot y agrega columnas faltantes con `ALTER TABLE` idempotente (sin migration script externo). Idempotente porque chequea con `inspect(engine)` antes de aplicar.
+- `repositories.py`: `listar_por_usuario` filtra activos por default; flags `incluir_archivados=True` y `solo_papelera=True`. Nuevos métodos `listar_papelera_global` (admin) y `listar_papelera_expirada` (job).
+- Use case nuevo `src/core/usecases/archivar_documento.py` con `ArchivarDocumento` (5 acciones: archivar/desarchivar/enviar_a_papelera/restaurar_de_papelera/eliminar_permanente) + función `purgar_papelera_expirada()`. `eliminar_permanente` requiere flag `es_admin=True` o levanta `PermissionError`.
+- `app.py`: job de purga corre una vez por sesión de Streamlit al boot. Home reorganizada en 3 tabs (Activos / Archivados / Papelera) con acciones contextuales por tab.
+- 11 tests nuevos (use case + job de purga + repositorio con BD efímera en tmp_path).
+
+**Gotcha técnico SQLAlchemy + Python 3.14:** `Mapped[datetime | None]` y `Mapped[Optional[datetime]]` ambos fallan en ORM scan (`TypeError: descriptor '__getitem__' requires 'typing.Union' but received 'tuple'`). Workaround: usar la forma `Column` clásica sin `Mapped[...]` para columnas nullable. Documentado en `db.py`.
+
+### A.1.c — bloqueado pendiente Vidal
+
+- A.1.a (reunión 30 min con Vidal) sigue pendiente. Necesita confirmar:
+  - ¿ALB hace OIDC con Cognito y forwardea `X-Amzn-Oidc-Identity` / `X-Amzn-Oidc-Data`?
+  - ¿O Cognito-Hosted-UI redirige y la app debe leer JWT/cookie?
+  - ¿Qué grupos Cognito habrá para definir roles `user` vs `admin`?
+- Mientras tanto, la mitigación A.1.b (password-gate) protege el deploy en EC2.
+- A.1.d (roles admin) queda como follow-up post A.1.c.
+
+### Changelog técnico para Vidal
+
+- Nuevo `docs/Migracion EC2/CHANGELOG_TECNICO_VIDAL.md` (carpeta dedicada). Cubre las 11 secciones del plan: resumen ejecutivo, decisiones que afectan deploy, nuevas dependencias, env vars nuevas, cómo se llama al LLM (sección clave para decisión Bedrock vs Anthropic), schema/migraciones aditivas, estructura nueva, archivos sensibles, checklist deploy, riesgos, Q&A esperado.
+- Anexo S13 al final con resumen de los 5 sub-tareas implementadas, tabla de comportamiento que cambió, y "siguientes pasos para Vidal".
+
+### Commit + push
+
+- Commit `c15dba7` (37 archivos cambiados, +2902/-286). Mensaje detalla las 5 sub-tareas + lo bloqueado + tests.
+- Push: rama local `claude/sweet-galileo-e2550b` (del worktree) → rama remota `feat/remediacion-s13-s16` en GitHub.
+- **PR NO abierta todavía**. Se abre cuando Vidal confirme A.1.c.
+
+### Calidad
+
+- **pytest: 307/307 passing** (de 263 baseline → +44 nuevos). Los 7 fallos en `tests/integration/test_import_end_to_end.py` siguen siendo pre-existentes (fixtures SMNYL no copiadas al worktree).
+- `ruff check` clean en `src/`, `tests/`, `app.py`.
+- `ruff format` aplicado.
+
+### Validación visual quedó pendiente
+
+Alberto validó la app corriendo en `localhost:8502` durante la sesión. Los flujos no se ejercieron de extremo a extremo todavía:
+- Subir docx + fuentes en "Crear nuevo" → ver banner de prellenado.
+- Subir PDF en "Mejorar documento" → validar detección de headings.
+- Archivar y restaurar docs desde home.
+- Exportar DOCX con cada uno de los 3 modos de idioma.
+- Activar `DOCUMENTE_GATE_PASSWORD` y validar password-gate.
+
+---
+
+## Lo que sigue — sesión 14
+
+### Path crítico inmediato
+
+1. **Compartir con Vidal el changelog** (`docs/Migracion EC2/CHANGELOG_TECNICO_VIDAL.md`) y agendar 30 min para A.1.a.
+2. **Cerrar A.1.c** con la decisión de Vidal:
+   - Si ALB-header: implementar `obtener_user_id_actual()` que lee `st.context.headers`, propagar `user_id` a use cases, defensa en profundidad en el repo.
+   - Si JWT/middleware: agregar `python-jose` (o equivalente), middleware que valida y extrae sub claim, mismo wiring.
+3. **A.1.d roles admin**: implementar lectura del grupo Cognito (header `X-Amzn-Oidc-Groups` o claim del JWT) + flag `es_admin` propagado a `eliminar_permanente`.
+
+### Fase B (Sprint S14): Contenido inteligente
+
+Arranca cuando A.1 esté cerrada. 4 sub-tareas:
+
+- **B.1 — Análisis profundo del ancla con reestructuración (#2).** Nuevo `StructureRealigner` que detecta cuando un ancla no sigue el template NYL (cobertura < 50%) y dispara Sonnet para mapear fragmentos del ancla a las 28 secciones, marcando cada uno como `[Re-estructurado desde ancla — revisar]`. Resuelve "el output es casi idéntico al ancla".
+- **B.2 — DocumentPolisher (revisión de coherencia narrativa) (#7).** Toggle opt-in en el modal de exportar ("Revisar coherencia con IA antes de exportar ~$0.02 USD"). Pasa el documento completo (con prompt caching) a Claude para detectar contradicciones cross-seccionales, referencias rotas y redacción dissonante. Devuelve sugerencias para aceptar/rechazar individualmente.
+- **B.3 — Apéndices en todas las secciones + Excel multi-hoja + guía formato (#3).** Quitar el whitelist hardcoded en `entrevista.py:205`. `tabla_reader.py` itera `wb.sheetnames` y crea un apéndice por hoja con título `"{archivo} — {hoja}"`. Documentar 3 reglas básicas de formato Excel en una guía pública.
+- **B.4 — Editor inline desde vista previa (#12).** Crear `src/ui/pages/editar_seccion_mrm.py` espejo del Prophet existente, con tipos de editor según `tipo_contenido` del catálogo (texto/lista/campos). Botón "✏️ Editar inline" en cada sección de `vista_previa.py`.
+
+### Fase C (Sprint S15): Apéndices avanzados + Versionado
+
+- **C.1 — Apéndices PDF + fórmulas matemáticas (#9).** PDF como apéndice se renderea a imagen embebida (cada página = PNG vía `pdf2image` o `PyMuPDF`). Fórmulas LaTeX → OMML con `pylatexenc` + XSLT (fallback a PNG con matplotlib si falla). Nuevo campo `formulas_inline` en `Seccion`.
+- **C.2 — Versionado de documentos (#10).** Tabla nueva `versiones` con snapshot JSON + hash. Cada export crea v+1 opcionalmente. DocxWriter incrusta metadata identificadora en `core_properties` del docx. Al re-importar, app reconoce versión previa y ofrece "crear v{N+1}" o "documento nuevo". Vista de diff sección-por-sección.
+
+### Fase D (Sprint S16+): Prophet + Frontend
+
+- **D.1 — Prophet correctivos (#4).** Plantilla SMNYL completa con 4 loops docxtpl + botón "Exportar Ficha Prophet" en dashboard (lógica ya existe en `docx_writer_prophet.py`). UX self-service para MA. Demo controlada con Carmona/Cynthia/Magallanes con feedback estructurado. **NO arrancar Prophet Fase 1 sin demo positiva.**
+- **D.2 — Frontend audit + plan migración Next.js (#5).** Capturas de las 11 pantallas. Ejecutar skill `design:design-critique` por pantalla. `design:accessibility-review` WCAG 2.1 AA. `design:design-system` para tokens portables. **Plan dedicado** de migración a FastAPI backend + Next.js + shadcn/cult-ui frontend (~5 semanas de ejecución). Decisión de migrar real se toma con datos en mano.
+
+### Pendientes menores
+
+- Borrar carpeta huérfana `.claude/worktrees/cool-wing-eca24c` (cosmético).
+- Fijar `anthropic>=0.50.0` en `pyproject.toml` (heredado de S12, sigue pendiente).
+- Template DOCX Prophet completo (sigue pendiente de S11).
+- Validación visual S10 (checklist en `pending_validation_items.md`).
+- Validación visual S13 (5 flujos descritos arriba).
+
+### Reglas de oro vigentes
+
+- `main` queda en `51d845e` — no merge hasta que Vidal valide deploy.
+- Todo S13/S14/S15/S16 vive en `feat/remediacion-s13-s16` con sub-ramas por fase.
+- Changelog técnico se actualiza al cerrar cada fase — sin update, no merge.
+- TDD obligatorio; baseline post-S13 es 386+ tests passing.
+- Schema migrations SOLO aditivas, idempotentes al boot.
+
+---
+
+## Progreso de sesión 13 (continuación maratón — 2026-05-19)
+
+**Tras commit `c15dba7` (Fase A), arrancamos Fase B, C, D.2 y fix de breadcrumb en una sola sesión continua. Toda la lógica con TDD, ruff clean, 0 regresiones.**
+
+### Fase B — Contenido inteligente ✅ (4 sub-tareas)
+
+**B.1 — StructureRealigner del ancla (#2)**
+- Nuevo `src/core/usecases/structure_realigner.py` + prompt en `src/llm/prompts/structure_realign.py`.
+- Cuando la `cobertura_catalogo` < 50% tras leer el ancla, Sonnet remapea fragmentos verbatim del docx/pdf bruto a las 28 secciones NYL.
+- Prompt obliga "NO inventar" — solo mover fragmentos del ancla.
+- Marca cada sección remapeada con `[Re-estructurado desde ancla — revisar]` (nuevo string en `strings_localizados.py`, ES/EN).
+- Documento extendido con propiedad `cobertura_catalogo`.
+- Wire en `importar_documento.py` (Paso 4 del flujo) con extracción de texto crudo desde ancla.
+- 16 tests nuevos.
+
+**B.3 — Apéndices en todas las secciones + Excel multi-hoja (#3)**
+- `tabla_reader.py`: `leer_excel_todas_hojas(ruta)` y `leer_tabla_todas(ruta)` que iteran `wb.sheetnames`. Hojas vacías se omiten. Para int de hoja, recupera el nombre real ("Mortalidad" en lugar de "Hoja1").
+- `adjuntar_tabla.py`: nuevo método `ejecutar_multihoja()` — Excel con N hojas → N apéndices con título `"{base} — {hoja}"`. Para CSV / mono-hoja, no agrega sufijo.
+- `entrevista.py:205`: **quitado el whitelist** `if es_seccion_data_heavy()`. El expander de apéndices ahora aparece en TODAS las secciones (con caption "típicamente data-heavy" si aplica).
+- 9 tests nuevos.
+
+**B.2 — DocumentPolisher (coherencia narrativa) (#7)**
+- Nuevo `src/core/usecases/document_polisher.py` + prompt en `src/llm/prompts/document_polish.py`.
+- Toma documento completo, devuelve `list[SugerenciaPolish]` con tipos: `inconsistencia`, `contradiccion`, `redaccion`, `referencia_rota`.
+- Prompt obliga "no inventar" — cada hallazgo debe ser quotable del documento.
+- Toggle opt-in en modal de export: "Revisar coherencia narrativa con IA antes de exportar (~$0.02 USD)".
+- Resultado se muestra en card expandible del dashboard con sugerencias coloreadas por severidad.
+- 15 tests nuevos.
+
+**B.4 — Editor inline desde vista previa (#12)**
+- Nuevo `src/ui/pages/editar_seccion_mrm.py`: textarea markdown + preview live lado a lado.
+- Botón "✏️ Editar" en cada sección de `vista_previa.py` (junto al título).
+- Persiste con `seccion.completitud` re-evaluada por longitud (>200 chars = completa, 0 = vacía, resto = parcial).
+- Audit event `seccion_editada` con descripción "editada inline desde vista previa".
+- 4 tests nuevos.
+
+### Fase C — Apéndices avanzados + Versionado ✅ (2 sub-tareas)
+
+**C.1 — Apéndices PDF + fórmulas matemáticas (#9)**
+- **PyMuPDF** (>=1.23, sin deps SO) para renderizar páginas PDF a PNG embebido. `pdf_apendice_reader.py` con `renderizar_pdf_a_paginas_png(archivo, dpi=200, max_paginas=30)`.
+- **matplotlib MathText** (>=3.7) para renderizar LaTeX → PNG. Nuevo `src/docs/formulas/latex_to_image.py`. NO requiere instalación de LaTeX en SO.
+- Modelo `Apendice` extendido: `TipoApendice = Literal["tabla", "diagrama", "pdf", "formula", "otro"]` + nuevo campo `latex_source: str`.
+- `DocxWriter._agregar_apendice_pdf()` y `._agregar_apendice_formula()` — para PDF carga desde Storage y embebe cada página como imagen; para fórmula renderea on-demand.
+- Nuevos use cases `AdjuntarPdfApendice` y `AdjuntarFormulaApendice` (en `src/core/usecases/adjuntar_tabla.py`).
+- UI: en entrevista, el file_uploader acepta ahora `.pdf` también; sección separada de fórmula LaTeX con preview KaTeX vivo (`st.latex()`).
+- 20 tests nuevos (6 PDF reader + 7 LaTeX render + 7 integration).
+
+**C.2 — Versionado de documentos (#10)**
+- Nuevo modelo `Version` (`src/core/models/version.py`) con snapshot_json + hash_contenido SHA-256 + número monotónico.
+- Nueva tabla `versiones` (SQLAlchemy `VersionRow` en `db.py`). `Base.metadata.create_all` la crea idempotente al boot.
+- `VersionRepository` con `crear`, `obtener`, `listar_por_documento`, `proximo_numero`, `ultima_version`.
+- Use case `CrearVersion` (`src/core/usecases/crear_version.py`): hash excluye `audit_trail`, `actualizado_en`, `metricas_uso` (campos volátiles). **Idempotente** — si hash igual al previo, NO duplica.
+- `ExportarDocumento` con parámetros nuevos `crear_version: bool` y `comentario_version: str`.
+- `_incrustar_metadata_version()`: el .docx exportado lleva `core_properties.category="DocuMente"` + `core_properties.comments="documento_id=X;version=N;hash=12hex"`. Sobrevive transit por email/OneDrive.
+- `ImportarDocumento` lee `core_properties` antes de procesar. Si detecta `documento_id` previo, agrega advertencia en `ResultadoImportacion.documento_id_previo` para que UI pregunte "crear v{N+1} vs nuevo".
+- UI dashboard: checkbox "Crear nueva versión al exportar" + input comentario + card "🔖 Historial de versiones (N)" expandible.
+- Auditoría `TipoEvento` extendido con `version_creada`, `version_restaurada`.
+- 8 tests nuevos.
+
+**Gotcha técnico SQLAlchemy + Python 3.14:** `Mapped[datetime | None]` y `Mapped[Optional[datetime]]` fallan en ORM scan. Workaround: usar `Column` clásico (sin `Mapped[...]`) para columnas nullable. Documentado en `db.py:archivado_en`.
+
+### Fix de UX — Breadcrumb clickeable
+
+- Feedback Alberto: el breadcrumb del header **no era clickeable**, además aparecía visualmente desbalanceado.
+- Componente `src/ui/components/header.py` reescrito:
+  - Acepta `destinos: list[str | None]` opcional o auto-infiere (`Inicio→home`, `{nombre_doc}→dashboard` si hay 3+ items, último=current).
+  - Cada nivel intermedio renderea con `st.button(type="tertiary")` con CSS de link (sin border, sin background, color `text_muted`, hover azul + underline).
+  - **Fix visual final**: ratios de columnas estrechos (length × 0.08), `gap="small"`, `vertical_alignment="center"`, padding final grande (8.0) para empujar items a la izquierda, CSS `width: auto !important` + `min-width: 0` en botones tertiary para que NO ocupen toda la columna.
+  - 7 tests unit (cobertura del auto-inferencia).
+
+### D.2 — Auditoría frontend completa + plan dedicado de migración Next.js ✅
+
+**4 documentos entregados** en `docs/superpowers/`:
+
+1. **`specs/2026-05-19-design-system-audit.md`** — Score 62/100. Identifica:
+   - 9 tokens definidos (3 colores + 2 fuentes + 6 spacings + 3 radii + 3 shadows = 23 tokens).
+   - 5 colores hex hardcoded fuera de theme.py (en `gap_badge`, `chat_bubble`, `vista_previa`).
+   - 102 ocurrencias de tipografía literal (`0.875rem`, `0.75rem`, etc.) en 20 archivos.
+   - Faltan soft variants (`success_soft`, `warning_soft`, etc.) y escala tipográfica completa.
+   - 3 patterns de "color por estado" duplicados (seccion_card, gap_badge, timeline) — refactor a `state_to_color()`.
+   - **Propone `design_tokens.json` portable** que sirva a Streamlit hoy y Next.js mañana.
+
+2. **`specs/2026-05-19-design-critique-por-pantalla.md`** — 50+ findings de UX/UI en las 12 pantallas, priorizados P0/P1/P2:
+   - Home: 3 CTAs equivalentes (paradox of choice), tabs sin badges de cantidad.
+   - Importar: 2 secciones numeradas planas, st.info default rompe marca.
+   - Dashboard: 28 cards en grid 4×7 sin agrupar por capítulo NYL.
+   - Brief inicial: 10 textareas amontonadas, scroll infinito.
+   - Entrevista: split 1.4:1 sub-óptimo, expander apéndice con 3 sub-secciones.
+   - Por cada pantalla, máximo 5 hallazgos con recomendación concreta.
+   - 12 quick wins en Streamlit + 8 issues que solo se arreglan con migración.
+
+3. **`specs/2026-05-19-accessibility-audit.md`** — WCAG 2.1 AA con **cálculos de contrast ratio reales**:
+   - **5 críticos**: `success` #4b8b7f (3.96:1), `warning` #ce7046 (3.48:1), `info` #2e86af (4.08:1) FALLAN AA normal text. Gap badges "media" y "baja" también fallan.
+   - **7 majors**: touch targets < 44px en breadcrumb buttons y icon-only ✏️, labels collapsed pierden contexto SR, status dots sin aria-label.
+   - **4 minors**: landmarks semánticos, logo sin alt, focus indicators SMNYL.
+   - Fix: agregar tokens `success_dark` (#264640 Dark Pine), `warning_dark` (#544235), `info_dark` (#0a385e) y usarlos como **texto**, dejando los originales solo para fondos/iconos/borders.
+
+4. **`plans/2026-05-19-migracion-frontend-nextjs.md`** — **Plan dedicado** 5 sprints (~5 semanas full-time o 8-10 semanas part-time):
+   - **W1**: FastAPI wrapping de use cases + OpenAPI → cliente TS auto-generado. design_tokens.json.
+   - **W2**: Next.js 15 + Tailwind v4 + shadcn/ui + cult-ui scaffolding. Cognito real con @aws-amplify/auth (resuelve A.1.c). Home renderea.
+   - **W3**: Páginas core (importar, crear, dashboard) con bento grid + accordion por capítulo NYL.
+   - **W4**: Entrevista (resize draggable) + vista previa (hover-only edit) + editor MRM con toolbar.
+   - **W5**: Polish a11y + microinteracciones + Playwright E2E + deploy EC2.
+   - 21 tasks granulares. Mapeo componente-a-componente Streamlit → shadcn/cult-ui.
+   - Riesgos identificados + mitigaciones.
+
+### UX Pro Max audit (complemento) ✅
+
+**Doc**: `docs/superpowers/specs/2026-05-19-uiux-pro-max-audit.md`
+
+Auditoría adicional aplicando **UX laws + 99 reglas del skill ui-ux-pro-max**:
+
+- **4 pecados de UX** identificados: Miller violado (home + dashboard), Doherty violado (LLM ops sin feedback), patrones web 2025 ausentes, onboarding sin gamificación.
+- **10 UX laws aplicadas al journey real**: Hick, Miller, Fitts, Jakob, Doherty, Aesthetic-Usability, Goal-Gradient, Peak-End, Tesler, Zeigarnik. Por cada ley: violación específica + fix concreto.
+- **Friction map** estima ~40-55% abandono acumulado en primer doc. Top 2 fixes (brief wizard + onboarding agrupado) lo bajan a ~25%.
+- **12 patrones modernos faltantes**: skeleton screens, optimistic UI, undo toasts, command palette (cmd+K), recent-edits surfacing, streaming LLM text, empty states con CTA, progressive onboarding, autosave indicator, drag-and-drop, inline conflict resolution.
+- **Estilo recomendado**: **Refined Minimalism + Bento Grid** del set de 50+.
+- **Paleta refinada**: SMNYL base + variants intermedias (`primary-50`, `primary-100`, `primary-200`) + warm neutrals (`surface-warm: #fafaf9`) + dark variants para texto (resuelve los 5 a11y críticos).
+- **Typography pair**: Georgia (display) + **Inter** (body UI denso, fallback Tahoma) + JetBrains Mono (model_ids).
+- **TOP 10 quick wins** antes de Next.js (~25h total): stepper visual, hero "Continúa...", emojis → Lucide icons, empty states con CTA, tokens `_dark`, toast con Deshacer, confetti en peak-end export, "Guardado hace Xs" indicator, dashboard agrupado por capítulo NYL, microinteracciones globales.
+- **Mockup ASCII del dashboard rediseñado** con bento grid (hero card completitud + sticky sidebar gobernanza + brechas críticas destacadas + capítulos en accordion).
+
+### Tests + calidad
+
+- Suite final: **386 tests pasando** (de 307 al cierre de S13 Fase A → +79 nuevos en B + C + D.2 fix breadcrumb).
+- `ruff check` clean. `ruff format` aplicado.
+- 0 regresiones.
+- Los 7 fallos pre-existentes de fixtures siguen igual (fixtures `SMNYL/Ejemplos actuales/*.docx` no copiados al worktree).
+
+### Estado al cierre absoluto de S13
+
+| Sub-tarea | Estado |
+|---|---|
+| A.1.b password gate | ✅ committed `c15dba7` |
+| A.2 onboarding nunca silencioso | ✅ committed |
+| A.3 idioma normaliza | ✅ committed |
+| A.4 PDF como ancla | ✅ committed |
+| A.5 archivado/papelera | ✅ committed |
+| **A.1.c Cognito real** | ⏸️ bloqueado pendiente Vidal |
+| B.1 StructureRealigner | ✅ código completo, pendiente commit |
+| B.2 DocumentPolisher | ✅ código completo, pendiente commit |
+| B.3 Apéndices universales + multi-hoja | ✅ código completo, pendiente commit |
+| B.4 Editor inline MRM | ✅ código completo, pendiente commit |
+| C.1 Apéndices PDF + LaTeX | ✅ código completo, pendiente commit |
+| C.2 Versionado | ✅ código completo, pendiente commit |
+| Breadcrumb clickeable + visual fix | ✅ código completo, pendiente commit |
+| **D.2 Auditoría frontend completa** | ✅ 4 audits + plan dedicado escritos, pendientes commit |
+| **D.1 Prophet correctivos + demo MA** | ⏸️ siguiente prioridad |
+
+---
+
+## Lo que sigue — sesión 14
+
+### Path crítico inmediato
+
+1. **Validar visualmente** en `localhost:8502`:
+   - Breadcrumb refinado (espaciado clickeable).
+   - Flujos Fase B + C: importar con re-estructuración del ancla, apéndice Excel multi-hoja, PDF como apéndice, fórmula LaTeX, polish de coherencia, editor inline MRM, exportar con versión, historial de versiones, papelera + restaurar.
+
+2. **5 fixes a11y críticos** (~2h, antes de Prophet):
+   - Agregar tokens `success_dark`, `warning_dark`, `info_dark` a `theme.py` (Dark Pine #264640, Dark Sunset #544235, Dark Rain #0a385e).
+   - Refactor de `seccion_card.py`, `gap_badge.py`, `timeline.py`, `vista_previa.py` para usar los tokens dark como TEXTO (mantener los originales para fondos/iconos/borders).
+   - Tests: validar contrast ratios pasan AA con los nuevos tokens.
+   - **Esto desbloquea WCAG 2.1 AA** para piloto formal.
+
+3. **Top 10 quick wins UX** (decisión: hacerlos antes de Prophet o saltarlos):
+   - Ver lista priorizada en `docs/superpowers/specs/2026-05-19-uiux-pro-max-audit.md` §6.
+   - Estimado total: 25-30h (3-4 días).
+   - Top 5 con mayor ROI: stepper visual, hero "Continúa…", empty states con CTA, dashboard agrupado, "Guardado hace Xs" indicator.
+
+4. **D.1 Prophet correctivos** (cuando esté listo):
+   - **D.1.a** — Plantilla SMNYL completa de Prophet: 4 loops docxtpl + paleta SMNYL en `src/docs/templates/prophet_model_doc_smnyl.docx`.
+   - **D.1.b** — Botón "Exportar Ficha Prophet" en dashboard cuando `documento.tipo == "prophet"`. Lógica ya existe en `docx_writer_prophet.py`.
+   - **D.1.c** — Mejorar UX self-service de `crear_prophet.py`.
+   - **D.1.d** — Demo con Carmona / Cynthia / Magallanes con feedback estructurado.
+   - **D.1.e** — Decisión go/no-go Prophet Fase 1.
+
+5. **A.1.c Cognito real con Vidal**:
+   - Compartir los 4 audits + `plans/2026-05-19-migracion-frontend-nextjs.md` con Vidal.
+   - Agendar 30 min para confirmar mecánica Cognito (ALB-header vs JWT-middleware vs Hosted UI).
+   - Implementar A.1.c con la decisión.
+
+### Pendientes menores
+
+- Borrar carpeta huérfana `.claude/worktrees/cool-wing-eca24c` (cosmético).
+- Validación visual S10 quedó pendiente desde S11 — checklist en `pending_validation_items.md`.
+
+### Bloqueos vigentes
+
+- **A.1.c Cognito real** — pendiente reunión Vidal (no urgente porque password-gate A.1.b ya mitiga).
+- **Prophet Fase 1** — NO arrancar sin feedback positivo de la demo con MA.
+- **Pulido formal de plantilla MRM `.docx`** — diferido hasta antes de demo externa.
+- **Bedrock vs Anthropic** — Vidal aceptó hacerlo con Bedrock directo. Cuando llegue el momento de deploy, swap del adaptador en `src/llm/`.
+
+### Decisiones tomadas en S13 (continuación)
+
+- **Fase D order invertido**: D.2 (frontend audit) ANTES de D.1 (Prophet). Razón: la auditoría aplica a TODO incluyendo Prophet, evita re-trabajo.
+- **D.2 cierre**: solo audits + plan dedicado. La ejecución de la migración Next.js es un plan separado de ~5 semanas, no se inicia en S14.
+- **Refined Minimalism + Bento Grid** como estilo objetivo post-migración (no glassmorphism ni brutalismo).
+- **Typography pair confirmada**: Georgia (display, brand) + Inter (body, moderno) + JetBrains Mono (código). Mantiene marca con Tahoma como fallback.
+
+### Reglas de oro vigentes (no cambian)
+
+1. `main` queda en `51d845e` — no merge hasta que Vidal valide deploy.
+2. Todo el trabajo vive en `feat/remediacion-s13-s16` con sub-ramas por fase.
+3. Changelog técnico `docs/Migracion EC2/CHANGELOG_TECNICO_VIDAL.md` se actualiza al cerrar cada fase.
+4. TDD obligatorio. Baseline al cierre de S13 = 386 tests passing.
+5. Schema migrations SOLO aditivas, idempotentes al boot.
+6. NUNCA borrar el avance del usuario. Backup antes de cambios arriesgados a BD.

@@ -43,6 +43,12 @@ STRINGS_UI: Final[dict[str, dict[Idioma, str]]] = {
         "es": "[Borrador automático — revisar]",
         "en": "[Automatic draft — review]",
     },
+    # Reestructurado por StructureRealigner (B.1) — contenido del ancla
+    # mapeado a una sección NYL distinta a la nomenclatura original.
+    "reestructurado_revisar": {
+        "es": "[Re-estructurado desde ancla — revisar]",
+        "en": "[Re-structured from anchor — review]",
+    },
     # Motivos predefinidos de omisión (en `OmitirSeccion.MOTIVOS_OMISION`).
     "motivo_no_aplica": {
         "es": "No aplica al modelo",
