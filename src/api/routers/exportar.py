@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from pathlib import Path
+from urllib.parse import quote
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, status
@@ -38,6 +39,19 @@ _TEMPLATE_MRM = (
 )
 
 _DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
+
+def _content_disposition(filename: str) -> str:
+    """Construye Content-Disposition seguro para Unicode (RFC 6266 + 5987).
+
+    HTTP headers son latin-1 por spec. Si el filename tiene caracteres no
+    representables (ej. em-dash en nombres de modelos), `filename="..."`
+    crashea. Se añade `filename*=UTF-8''<percent-encoded>` para clientes
+    modernos y un ASCII fallback para clientes antiguos.
+    """
+    ascii_fallback = filename.encode("ascii", "replace").decode("ascii").replace("?", "_")
+    utf8_quoted = quote(filename, safe="")
+    return f"attachment; filename=\"{ascii_fallback}\"; filename*=UTF-8''{utf8_quoted}"
 
 
 @router.post(
@@ -82,11 +96,9 @@ def exportar_docx(
         content=resultado.contenido,
         media_type=_DOCX_MIME,
         headers={
-            "Content-Disposition": f'attachment; filename="{resultado.nombre_archivo}"',
+            "Content-Disposition": _content_disposition(resultado.nombre_archivo),
             "X-Documente-Version": (
-                str(resultado.version.version.numero)
-                if resultado.version is not None
-                else ""
+                str(resultado.version.version.numero) if resultado.version is not None else ""
             ),
         },
     )
@@ -115,8 +127,7 @@ def exportar_ficha_prophet(
     writer = DocxWriterProphet()
     docx_bytes = writer.render(doc)
     nombre = (
-        f"Ficha_Prophet_"
-        f"{doc.metadata_modelo.nombre_modelo.replace(' ', '_') or 'sin_nombre'}.docx"
+        f"Ficha_Prophet_{doc.metadata_modelo.nombre_modelo.replace(' ', '_') or 'sin_nombre'}.docx"
     )
     doc.registrar_evento(
         EventoAuditoria(
@@ -131,7 +142,7 @@ def exportar_ficha_prophet(
     return Response(
         content=docx_bytes,
         media_type=_DOCX_MIME,
-        headers={"Content-Disposition": f'attachment; filename="{nombre}"'},
+        headers={"Content-Disposition": _content_disposition(nombre)},
     )
 
 
