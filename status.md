@@ -2,7 +2,7 @@
 
 > Estado vivo del proyecto. Se lee al iniciar sesión y se actualiza al cerrar si hubo cambios significativos.
 
-**Última actualización:** 2026-05-20 (sesión 14 maratón — a11y AA + 10 Quick Wins UX + Premium T1 + **rewrite completo a FastAPI + Next.js 14 (F1→F4)**. Frontend premium con paridad funcional total con Streamlit. 18 commits sobre `main`.)
+**Última actualización:** 2026-05-20 (sesión 14 — cierre: a11y AA + 10 Quick Wins UX + Premium T1 + **rewrite Next.js + FastAPI (F1→F4)** + post-PR fixes (logo cerebro+libro, 404s sidebar, favicon SMNYL, openapi-typescript, HANDOFF §14 paths Cognito/PG/Bedrock, §5 CORS VPN). **23 commits sobre `main`, PR abierto, pusheado a GitHub.**)
 
 ---
 
@@ -22,17 +22,31 @@ Ambos frontends consumen los mismos use cases en `src/core/usecases/`. El domini
 
 **Repo GitHub `AlbertoMafud/DocuMente`:**
 - `main` congelada en `51d845e` (MVP estable — el plan dice que main queda intacta hasta que Vidal valide deploy).
-- **`claude/affectionate-noether-8e038f`** con todo el trabajo S13 + S14 (18 commits sobre main). Push pendiente al cierre de S14.
-- `feat/remediacion-s13-s16` aún existe en GitHub con el snapshot S13 puro.
+- **`claude/affectionate-noether-8e038f`** con todo S13+S14 (23 commits sobre main). **PUSHEADO** a `origin/claude/affectionate-noether-8e038f` al cierre de S14.
+- **PR a main** abierto pendiente — link: `https://github.com/AlbertoMafud/DocuMente/compare/main...claude/affectionate-noether-8e038f` (cuando Alberto haga click en "Create pull request").
+- `feat/remediacion-s13-s16` aún existe en GitHub con el snapshot S13 puro (obsoleto, sin S14).
 
 **Tests: 457 pasando** (429 unit + 28 integration smoke de API). Ruff check + format clean. ESLint frontend clean. TypeScript `--noEmit` clean. 0 regresiones.
 
-**Próximo inmediato (sesión 15):**
-1. **Probar entrevista LLM** en localhost:3002 (requiere copiar `.env` al worktree — `cp /c/Users/alber/Claude_AI/proyectos/DocuMente/.env .env`).
-2. **Compartir con Vidal** los docs `HANDOFF_VIDAL.md`, `ARQUITECTURA.md`, `MIGRATION_TO_EC2.md` (actualizado) y agendar reunión Cognito.
-3. **Decisión merge a main**: cuando Vidal apruebe la arquitectura → PR + merge.
-4. **Depuración post-merge** según `docs/ARCHIVOS_AUDITORIA.md` — eliminar archivos personales/obsoletos.
-5. **D.1 Prophet correctivos + demo MA**: template SMNYL completo + demo Carmona/Cynthia/Magallanes. Ya no bloqueado por UX/rewrite.
+**Próximo inmediato (sesión 15) — orden ejecutable:**
+
+### Bloque opción A aprobada (cierre técnico)
+
+1. **Implementar CORS env var** — modificar `src/api/main.py` para leer `CORS_ORIGINS` env var con default `*` (snippet ya documentado en `HANDOFF_VIDAL.md §5`). Vidal solo cambia .env, no código.
+2. **Correr `npm run build`** del frontend para validar producción. Si falla, arreglar antes de seguir.
+3. **Playwright opción B** — instalar `@playwright/test`, configurar `playwright.config.ts`, escribir 1 test happy-path E2E (crear documento → editar sección → exportar). ~1h. Base lista para escalar a 5-8 tests pre-deploy.
+
+### Operacional pendiente
+
+4. **Probar entrevista LLM** localmente: `cp /c/Users/alber/Claude_AI/proyectos/DocuMente/.env .env` y refrescar el backend FastAPI en :8001.
+5. **Compartir con Vidal**: el PR + los 4 docs (`HANDOFF_VIDAL.md`, `ARQUITECTURA.md`, `MIGRATION_TO_EC2.md`, `ARCHIVOS_AUDITORIA.md`). Mensaje sugerido en respuesta de Claude del 2026-05-20.
+6. **Agendar reunión Vidal (30 min)** para resolver decisiones de §8 HANDOFF: Cognito (A.1.c), dominio interno, sunset Streamlit, Bedrock.
+
+### Estratégico (post-aprobación Vidal)
+
+7. **Merge PR a main**.
+8. **Depuración** según `docs/ARCHIVOS_AUDITORIA.md`.
+9. **D.1.a Template Prophet DOCX** + D.1.c self-service + D.1.d demo MA — destrabe negocio Prophet Fase 1.
 
 ---
 
@@ -975,6 +989,19 @@ Sesión maratónica. Ejecuté todo el plan de remediación UX (S13→S16) + rewr
 - `ruff check` clean. `ruff format` aplicado.
 - 0 regresiones — todo el código Python preexistente sigue funcionando.
 
+### Bloque 3 — Cierre técnico + post-PR (commits `ae54df9` → `7c323a0`)
+
+Después de cerrar F4 y los docs, hicimos pulido + push + extensión del HANDOFF:
+
+- **Logo `BrandLogo`** SVG inline cerebro+libro (commit `ae54df9`). Reemplaza el cuadrito "D" placeholder del sidebar. Link a home con hover scale-105.
+- **Push de los 14 commits faltantes** a GitHub (`origin/claude/affectionate-noether-8e038f` actualizado). Link de PR generado: `https://github.com/AlbertoMafud/DocuMente/compare/main...claude/affectionate-noether-8e038f?expand=1`
+- **Fix 404s sidebar** (commit `f7f7967`): quitamos "Documentos" (redundante con Inicio) y "Auditoría" (es contextual al doc, vive en `/documentos/[id]/auditoria`). Nuevas páginas `/configuracion` (estado app/health/env/auth) y `/ayuda` (FAQ + links a docs).
+- **Favicon SMNYL** (mismo commit): borrado `favicon.ico` default, creado `app/icon.svg` con cerebro+libro. Next.js 14 lo sirve automáticamente.
+- **Fonts Geist eliminadas** (mismo commit): borrados `app/fonts/GeistVF.woff` y `GeistMonoVF.woff`. Usamos Georgia/Tahoma per BRAND_GUIDELINES.
+- **openapi-typescript autogen** (mismo commit): instalado v7.13.0, script `npm run gen:api-types`, `openapi.gen.ts` generado (3198 líneas) como fuente de verdad. `types.ts` ahora documenta el workflow de sync.
+- **HANDOFF §14 paths exactos para Vidal** (mismo commit): Cognito (solo `src/api/auth.py`), PostgreSQL (solo URI en `.env`), Bedrock (`BedrockClient` en `src/llm/client.py`). Costo total 5-6 días.
+- **HANDOFF §5 CORS VPN clarificado** (commit `7c323a0`): 3 opciones explícitas para Vidal (dejar `*` durante piloto / cerrar al IP 172.x.x.x / hostname interno `documente.smnyl.local`). Documenta intención; el cambio en código se hace en S15.
+
 ### Estado al cierre absoluto de S14
 
 | Tarea | Estado |
@@ -986,9 +1013,17 @@ Sesión maratónica. Ejecuté todo el plan de remediación UX (S13→S16) + rewr
 | F2 Next.js skeleton + home | ✅ committed `0b4700f` |
 | F3 5 páginas core | ✅ committed `041e154` |
 | F4 8 páginas + governance + quick links | ✅ committed `1cac71a` |
-| Docs handoff/arquitectura/guía/auditoría | ✅ commit final S14 |
+| Docs handoff/arquitectura/guía/auditoría | ✅ committed `5e37964` |
+| Logo cerebro+libro | ✅ committed `ae54df9` |
+| **Push a GitHub** | ✅ todos los 23 commits en `origin/claude/affectionate-noether-8e038f` |
+| Fix 404s sidebar + favicon + openapi-typescript + HANDOFF §14 | ✅ committed `f7f7967` |
+| HANDOFF §5 CORS para deploy VPN interno | ✅ committed `7c323a0` |
+| **Abrir PR a main** | ⏸️ Alberto hace click en el link compare |
+| **Implementar CORS env var** en `src/api/main.py` | ⏸️ Sesión 15 (opción A aprobada) |
+| **`npm run build` validación** | ⏸️ Sesión 15 (opción A aprobada) |
+| **Playwright opción B** (instalar + 1 test happy-path) | ⏸️ Sesión 15 (opción A aprobada) |
 | **A.1.c Cognito real** | ⏸️ pendiente reunión Vidal |
-| **D.1 Prophet correctivos + demo MA** | ⏸️ siguiente prioridad |
+| **D.1 Prophet correctivos + demo MA** | ⏸️ siguiente prioridad de negocio |
 
 ---
 
