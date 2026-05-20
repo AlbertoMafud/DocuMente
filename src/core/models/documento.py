@@ -164,6 +164,20 @@ class Documento(BaseModel):
         self.audit_trail.append(evento)
         self.actualizado_en = datetime.now(UTC)
 
+    def ultimo_guardado_seccion(self, seccion_id: str) -> datetime | None:
+        """Timestamp del último evento `seccion_editada` para esta sección.
+
+        Devuelve `None` si la sección nunca se editó. La fuente de verdad
+        es el audit_trail, no un campo mutable en `Seccion` — preserva
+        trazabilidad (MRM §3.5) sin agregar estado redundante al modelo.
+        """
+        timestamps = [
+            e.timestamp
+            for e in self.audit_trail
+            if e.tipo == "seccion_editada" and e.seccion_id == seccion_id
+        ]
+        return max(timestamps) if timestamps else None
+
     @property
     def visibilidad(self) -> EstadoVisibilidad:
         """Estado de visibilidad derivado.

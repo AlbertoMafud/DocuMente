@@ -150,3 +150,113 @@ def test_documento_porcentaje_resuelto_cuenta_omitidas() -> None:
     assert doc.porcentaje_resuelto == 0.5
     # porcentaje_completitud sigue contando solo completas (1/4 = 0.25)
     assert doc.porcentaje_completitud == 0.25
+
+
+class TestUltimoGuardadoSeccion:
+    """`Documento.ultimo_guardado_seccion(seccion_id)` devuelve el timestamp
+    del último evento `seccion_editada` para esa sección, o None si nunca
+    se editó.
+
+    Base del Quick Win #8: indicador 'Guardado hace X' en editores MRM y
+    Prophet, que reutiliza `formato_relativo()` de `continue_hero`.
+    """
+
+    def test_sin_eventos_devuelve_none(self) -> None:
+        doc = Documento(
+            secciones=[Seccion(id="x", nombre="X", numero="1", obligatoria=True)]
+        )
+        assert doc.ultimo_guardado_seccion("x") is None
+
+    def test_seccion_inexistente_devuelve_none(self) -> None:
+        doc = Documento()
+        assert doc.ultimo_guardado_seccion("no-existe") is None
+
+    def test_devuelve_timestamp_del_evento_editada(self) -> None:
+        from datetime import UTC, datetime
+
+        ts = datetime(2026, 5, 10, 14, 30, tzinfo=UTC)
+        doc = Documento(
+            secciones=[Seccion(id="x", nombre="X", numero="1", obligatoria=True)]
+        )
+        doc.audit_trail.append(
+            EventoAuditoria(
+                timestamp=ts,
+                actor="default",
+                tipo="seccion_editada",
+                descripcion="edit",
+                seccion_id="x",
+            )
+        )
+        assert doc.ultimo_guardado_seccion("x") == ts
+
+    def test_devuelve_el_mas_reciente_si_hay_varios(self) -> None:
+        from datetime import UTC, datetime
+
+        ts1 = datetime(2026, 5, 1, 10, 0, tzinfo=UTC)
+        ts2 = datetime(2026, 5, 10, 14, 30, tzinfo=UTC)
+        ts3 = datetime(2026, 5, 5, 12, 0, tzinfo=UTC)
+        doc = Documento(
+            secciones=[Seccion(id="x", nombre="X", numero="1", obligatoria=True)]
+        )
+        for ts in (ts1, ts2, ts3):
+            doc.audit_trail.append(
+                EventoAuditoria(
+                    timestamp=ts,
+                    actor="default",
+                    tipo="seccion_editada",
+                    descripcion="edit",
+                    seccion_id="x",
+                )
+            )
+        assert doc.ultimo_guardado_seccion("x") == ts2
+
+    def test_ignora_eventos_de_otras_secciones(self) -> None:
+        from datetime import UTC, datetime
+
+        ts_x = datetime(2026, 5, 1, 10, 0, tzinfo=UTC)
+        ts_y = datetime(2026, 5, 10, 14, 30, tzinfo=UTC)
+        doc = Documento(
+            secciones=[
+                Seccion(id="x", nombre="X", numero="1", obligatoria=True),
+                Seccion(id="y", nombre="Y", numero="2", obligatoria=True),
+            ]
+        )
+        doc.audit_trail.append(
+            EventoAuditoria(
+                timestamp=ts_x,
+                actor="default",
+                tipo="seccion_editada",
+                descripcion="edit x",
+                seccion_id="x",
+            )
+        )
+        doc.audit_trail.append(
+            EventoAuditoria(
+                timestamp=ts_y,
+                actor="default",
+                tipo="seccion_editada",
+                descripcion="edit y",
+                seccion_id="y",
+            )
+        )
+        assert doc.ultimo_guardado_seccion("x") == ts_x
+        assert doc.ultimo_guardado_seccion("y") == ts_y
+
+    def test_ignora_eventos_de_otro_tipo(self) -> None:
+        from datetime import UTC, datetime
+
+        ts_otra = datetime(2026, 5, 1, 10, 0, tzinfo=UTC)
+        doc = Documento(
+            secciones=[Seccion(id="x", nombre="X", numero="1", obligatoria=True)]
+        )
+        # Un evento con seccion_id="x" pero distinto de 'seccion_editada'
+        doc.audit_trail.append(
+            EventoAuditoria(
+                timestamp=ts_otra,
+                actor="default",
+                tipo="seccion_omitida",
+                descripcion="omitida",
+                seccion_id="x",
+            )
+        )
+        assert doc.ultimo_guardado_seccion("x") is None
