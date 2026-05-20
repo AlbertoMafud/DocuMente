@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 from src.core.models import Documento, FuenteContexto, MetadataModelo, Seccion
-from src.core.usecases.sugerencias_multifuente import SugerenciasMultiFuente
+from src.core.usecases.sugerencias_multifuente import (
+    ResultadoSugerencias,
+    SugerenciasMultiFuente,
+)
 from tests.unit.test_interview_engine import FakeLLM
 
 
@@ -42,9 +45,13 @@ def test_sugiere_solo_para_secciones_vacias() -> None:
     llm = FakeLLM(["Sugerencia para 2.1 basada en fuente. (fuente: notas.txt)"])
     fuentes = [_fuente("notas.txt", "Texto fuente con información relevante.")]
 
-    rellenadas = SugerenciasMultiFuente(llm).ejecutar(doc, fuentes)
+    resultado = SugerenciasMultiFuente(llm).ejecutar(doc, fuentes)
 
-    assert rellenadas == 1
+    assert isinstance(resultado, ResultadoSugerencias)
+    assert resultado.secciones_pobladas == 1
+    assert resultado.secciones_intentadas == 1
+    assert resultado.fuentes_usadas == 1
+    assert resultado.errores == []
     seccion_vacia = doc.seccion_por_id("2.1.model_uses")
     seccion_completa = doc.seccion_por_id("2.2.model_scope")
     assert seccion_vacia is not None
@@ -62,9 +69,10 @@ def test_sin_fuentes_no_llama_llm() -> None:
     doc = _doc_con_seccion_vacia()
     llm = FakeLLM(["nunca"])
 
-    rellenadas = SugerenciasMultiFuente(llm).ejecutar(doc, [])
+    resultado = SugerenciasMultiFuente(llm).ejecutar(doc, [])
 
-    assert rellenadas == 0
+    assert resultado.secciones_pobladas == 0
+    assert resultado.fuentes_usadas == 0
     assert len(llm.llamadas) == 0
 
 
@@ -74,9 +82,10 @@ def test_fuentes_con_texto_vacio_se_ignoran() -> None:
     llm = FakeLLM(["nunca"])
     fuentes_vacias = [_fuente("vacia.txt", "")]
 
-    rellenadas = SugerenciasMultiFuente(llm).ejecutar(doc, fuentes_vacias)
+    resultado = SugerenciasMultiFuente(llm).ejecutar(doc, fuentes_vacias)
 
-    assert rellenadas == 0
+    assert resultado.secciones_pobladas == 0
+    assert resultado.fuentes_usadas == 0
     assert len(llm.llamadas) == 0
 
 
@@ -86,9 +95,10 @@ def test_si_llm_dice_sin_informacion_no_rellena_seccion() -> None:
     llm = FakeLLM(["[Sin información en fuentes adjuntas]"])
     fuentes = [_fuente("irrelevante.txt", "Texto que no toca la sección.")]
 
-    rellenadas = SugerenciasMultiFuente(llm).ejecutar(doc, fuentes)
+    resultado = SugerenciasMultiFuente(llm).ejecutar(doc, fuentes)
 
-    assert rellenadas == 0
+    assert resultado.secciones_pobladas == 0
+    assert resultado.secciones_intentadas == 1
     seccion = doc.seccion_por_id("2.1.model_uses")
     assert seccion is not None
     assert seccion.completitud == "vacia"
@@ -111,9 +121,9 @@ def test_max_secciones_limita_el_alcance() -> None:
     llm = FakeLLM(["draft"])
     fuentes = [_fuente("a.txt", "texto")]
 
-    rellenadas = SugerenciasMultiFuente(llm).ejecutar(doc, fuentes, max_secciones=0)
+    resultado = SugerenciasMultiFuente(llm).ejecutar(doc, fuentes, max_secciones=0)
 
-    assert rellenadas == 0
+    assert resultado.secciones_pobladas == 0
 
 
 def test_fuentes_default_lee_del_documento() -> None:
@@ -122,6 +132,35 @@ def test_fuentes_default_lee_del_documento() -> None:
     doc.fuentes_contexto.append(_fuente("doc_interno.txt", "Contenido del archivo."))
     llm = FakeLLM(["Sugerencia desde fuente del doc."])
 
-    rellenadas = SugerenciasMultiFuente(llm).ejecutar(doc)
+    resultado = SugerenciasMultiFuente(llm).ejecutar(doc)
 
-    assert rellenadas == 1
+    assert resultado.secciones_pobladas == 1
+
+
+def test_error_llm_se_propaga_a_resultado_y_no_aborta_flujo() -> None:
+    """Si el LLM crashea para una sección, se registra error y se sigue."""
+
+    class CrashLLM:
+        def __init__(self) -> None:
+            self.llamadas = 0
+
+        def chat(self, **_kwargs: object) -> object:
+            self.llamadas += 1
+            raise RuntimeError("simulated API failure")
+
+    doc = _doc_con_seccion_vacia()
+    fuentes = [_fuente("notas.txt", "texto útil")]
+
+    resultado = SugerenciasMultiFuente(CrashLLM()).ejecutar(doc, fuentes)  # type: ignore[arg-type]
+
+    assert resultado.secciones_pobladas == 0
+    assert resultado.secciones_intentadas == 1
+    assert resultado.hubo_errores is True
+    assert len(resultado.errores) == 1
+    assert "2.1.model_uses" in resultado.errores[0]
+    assert "RuntimeError" in resultado.errores[0]
+    # La sección original NO se mutó (sigue vacía)
+    seccion = doc.seccion_por_id("2.1.model_uses")
+    assert seccion is not None
+    assert seccion.completitud == "vacia"
+    assert seccion.contenido is None

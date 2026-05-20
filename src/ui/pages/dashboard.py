@@ -30,7 +30,7 @@ from src.core.usecases import (
 )
 from src.llm import AnthropicClient
 from src.storage.repositories import DocumentoRepository
-from src.ui.components import gap_badge, header, seccion_card
+from src.ui.components import gap_badge, header, onboarding_banner, seccion_card
 from src.ui.theme import SMNYL_COLORS
 
 _TEMPLATE_PATH = (
@@ -68,24 +68,46 @@ def _dialog_exportar_docx(documento_id_str: str) -> None:
     nombre_key = f"docx_nombre_{documento_id_str}"
 
     st.markdown(
-        "Selecciona el idioma del documento exportado. La traducción al inglés "
-        "usa Claude para mantener el tono institucional formal y preservar "
-        "vocabulario técnico-actuarial."
+        "Selecciona cómo quieres exportar el contenido. Las opciones de "
+        "*normalizar* usan Claude para detectar el idioma de cada sección y "
+        "traducir solo las que no estén en el idioma destino."
     )
 
+    opciones = [
+        "Normalizar a español",
+        "Normalizar a inglés (US corporate)",
+        "Bilingüe — exportar tal cual",
+    ]
     idioma_label = st.radio(
-        "Idioma",
-        options=["Español", "English (US corporate)"],
+        "Modo de idioma",
+        options=opciones,
         key=f"export_idioma_{documento_id_str}",
-        horizontal=True,
+        horizontal=False,
     )
-    idioma = "en" if idioma_label.startswith("English") else "es"
+    if idioma_label.startswith("Normalizar a español"):
+        idioma = "es_normalize"
+    elif idioma_label.startswith("Normalizar a inglés"):
+        idioma = "en_normalize"
+    else:
+        idioma = "bilingue"
 
-    if idioma == "en":
+    if idioma == "es_normalize":
         st.caption(
-            "La traducción dispara llamadas a Claude (~$0.01–0.05 USD según tamaño "
-            "del documento). El borrador en español NO se modifica — la traducción "
-            "vive solo en el .docx generado."
+            "Detecta el idioma de cada sección. Las que estén en inglés se "
+            "traducen al español; las que ya estén en español se preservan. "
+            "Costo aprox. $0.01–0.05 USD si hay secciones por traducir."
+        )
+    elif idioma == "en_normalize":
+        st.caption(
+            "Detecta el idioma de cada sección. Las que estén en español se "
+            "traducen al inglés corporativo americano; las que ya estén en "
+            "inglés se preservan. Costo aprox. $0.01–0.05 USD."
+        )
+    else:
+        st.caption(
+            "Exporta el contenido exactamente como lo capturaste. Útil si "
+            "tu documento es deliberadamente mixto (ej. citas en inglés "
+            "dentro de prosa en español). No dispara llamadas LLM de traducción."
         )
 
     col_cancel, col_go = st.columns(2)
@@ -104,11 +126,10 @@ def _dialog_exportar_docx(documento_id_str: str) -> None:
             st.error(f"Plantilla maestra no encontrada en {_TEMPLATE_PATH}.")
             return
         try:
-            spinner_msg = (
-                "Traduciendo y generando DOCX con marca SMNYL…"
-                if idioma == "en"
-                else "Generando DOCX con marca SMNYL…"
-            )
+            if idioma in ("es_normalize", "en_normalize"):
+                spinner_msg = "Detectando idiomas, traduciendo y generando DOCX…"
+            else:
+                spinner_msg = "Generando DOCX con marca SMNYL…"
             with st.spinner(spinner_msg):
                 resultado = _build_export_uc(doc_id).ejecutar(
                     doc_id,
@@ -434,6 +455,7 @@ def _render_gobernanza(documento: Documento) -> None:
                         help="Genera la Ficha Prophet en formato .docx.",
                     ):
                         from src.core.usecases import DocxWriterProphet
+
                         try:
                             with st.spinner("Generando Ficha Prophet..."):
                                 docx_bytes = DocxWriterProphet().render(documento)
@@ -631,6 +653,8 @@ def render() -> None:
             key=f"edit_meta_{documento.id}",
         ):
             _dialog_editar_metadata(str(documento.id))
+
+    onboarding_banner.render()
 
     _render_resumen(documento, brechas)
 

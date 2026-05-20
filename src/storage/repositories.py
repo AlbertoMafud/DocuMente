@@ -2,11 +2,19 @@
 
 Aísla la lógica de negocio de SQLAlchemy. Migrar de SQLite a PostgreSQL
 implica solo cambiar `DATABASE_URL` en `.env` — estas clases no cambian.
+
+Visibilidad (Fase A.5):
+- `listar_por_usuario` filtra `archivado=False` y `en_papelera=False` por
+  default. Use `incluir_archivados=True` o `solo_papelera=True` para casos
+  específicos (vistas de "Archivados", "Papelera", "Admin papelera").
+- Las mutaciones de visibilidad (`archivar`, `desarchivar`, etc.) son
+  métodos finitos del repositorio. La lógica de orquestación + audit event
+  vive en `src/core/usecases/archivar_documento.py`.
 """
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import select
@@ -35,6 +43,9 @@ class DocumentoRepository:
                         payload_json=payload,
                         creado_en=documento.creado_en,
                         actualizado_en=documento.actualizado_en,
+                        archivado=documento.archivado,
+                        en_papelera=documento.en_papelera,
+                        archivado_en=documento.archivado_en,
                     )
                 )
             else:
@@ -44,6 +55,9 @@ class DocumentoRepository:
                 row.nombre_modelo = documento.metadata_modelo.nombre_modelo
                 row.payload_json = payload
                 row.actualizado_en = documento.actualizado_en
+                row.archivado = documento.archivado
+                row.en_papelera = documento.en_papelera
+                row.archivado_en = documento.archivado_en
 
     def obtener(self, documento_id: UUID) -> Documento | None:
         """Devuelve el Documento o None si no existe."""
@@ -53,13 +67,56 @@ class DocumentoRepository:
                 return None
             return Documento.model_validate_json(row.payload_json)
 
-    def listar_por_usuario(self, user_id: str = "default") -> list[Documento]:
-        """Lista todos los documentos de un usuario, ordenados por más reciente."""
+    def listar_por_usuario(
+        self,
+        user_id: str = "default",
+        *,
+        incluir_archivados: bool = False,
+        solo_papelera: bool = False,
+    ) -> list[Documento]:
+        """Lista documentos de un usuario, ordenados por más reciente.
+
+        Default: solo activos (no archivados, no en papelera). Útil para home.
+        - `incluir_archivados=True`: incluye archivados, excluye papelera.
+        - `solo_papelera=True`: SOLO los que están en papelera.
+        """
         with session_scope() as s:
             stmt = (
                 select(DocumentoRow)
                 .where(DocumentoRow.user_id == user_id)
                 .order_by(DocumentoRow.actualizado_en.desc())
+            )
+            if solo_papelera:
+                stmt = stmt.where(DocumentoRow.en_papelera.is_(True))
+            else:
+                stmt = stmt.where(DocumentoRow.en_papelera.is_(False))
+                if not incluir_archivados:
+                    stmt = stmt.where(DocumentoRow.archivado.is_(False))
+            rows = s.execute(stmt).scalars().all()
+            return [Documento.model_validate_json(r.payload_json) for r in rows]
+
+    def listar_papelera_global(self) -> list[Documento]:
+        """Solo para admins: lista TODOS los documentos en papelera, todos los users."""
+        with session_scope() as s:
+            stmt = (
+                select(DocumentoRow)
+                .where(DocumentoRow.en_papelera.is_(True))
+                .order_by(DocumentoRow.actualizado_en.desc())
+            )
+            rows = s.execute(stmt).scalars().all()
+            return [Documento.model_validate_json(r.payload_json) for r in rows]
+
+    def listar_papelera_expirada(self, dias_retencion: int = 30) -> list[Documento]:
+        """Lista documentos en papelera con `archivado_en` antes del cutoff.
+
+        Útil para el job de purge automática.
+        """
+        cutoff = datetime.now(UTC) - timedelta(days=dias_retencion)
+        with session_scope() as s:
+            stmt = select(DocumentoRow).where(
+                DocumentoRow.en_papelera.is_(True),
+                DocumentoRow.archivado_en.isnot(None),
+                DocumentoRow.archivado_en < cutoff,
             )
             rows = s.execute(stmt).scalars().all()
             return [Documento.model_validate_json(r.payload_json) for r in rows]

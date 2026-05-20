@@ -30,8 +30,17 @@ def test_guardar_tabla_serializa_a_json(repo_con_doc_prophet) -> None:
     seccion = doc.seccion_por_id("corridas_runs")
     assert seccion is not None
 
-    filas = [{"numero": "33", "detalle": "IL UDI", "es_alm": "No",
-               "tiempo_ejecucion": "45 min", "corrida_precedente": "", "outputs_principales": "VNB", "responsable": "Carmona"}]
+    filas = [
+        {
+            "numero": "33",
+            "detalle": "IL UDI",
+            "es_alm": "No",
+            "tiempo_ejecucion": "45 min",
+            "corrida_precedente": "",
+            "outputs_principales": "VNB",
+            "responsable": "Carmona",
+        }
+    ]
     contenido_json = json.dumps({"filas": filas, "advertencias": []})
 
     seccion.contenido = contenido_json
@@ -52,7 +61,9 @@ def test_guardar_texto_persiste_correctamente(repo_con_doc_prophet) -> None:
     seccion = doc.seccion_por_id("supuestos")
     assert seccion is not None
 
-    seccion.contenido = json.dumps({"contenido": "Mortalidad CNSF 2000. Lapsos del 5%.", "advertencias": []})
+    seccion.contenido = json.dumps(
+        {"contenido": "Mortalidad CNSF 2000. Lapsos del 5%.", "advertencias": []}
+    )
     seccion.completitud = "completa"
     repo.guardar(doc)
 

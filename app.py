@@ -6,12 +6,14 @@ en `src/ui/pages/`. La UI consume use cases desde `src/core/usecases/`.
 
 from __future__ import annotations
 
+import contextlib
 from pathlib import Path
 
 import streamlit as st
 
+from src.core.usecases import ArchivarDocumento, purgar_papelera_expirada
 from src.storage.repositories import DocumentoRepository
-from src.ui.components import header
+from src.ui.components import auth_gate, header
 from src.ui.pages import (
     auditoria,
     brief_inicial,
@@ -81,40 +83,103 @@ def _render_home() -> None:
 
     st.markdown("<div style='height: 3rem;'></div>", unsafe_allow_html=True)
 
-    # Documentos recientes
+    # Documentos: tabs Activos / Archivados / Papelera
     repo = DocumentoRepository()
-    recientes = repo.listar_por_usuario("default")[:5]
+    user_id = "default"  # TODO Fase A.1.c: leer de header Cognito
 
-    if recientes:
-        st.markdown("### Documentos recientes")
-        muted = SMNYL_COLORS["text_muted"]
-        for doc in recientes:
-            nombre = doc.metadata_modelo.nombre_modelo or "Documento sin nombre"
-            pct = int(doc.porcentaje_completitud * 100)
-            with st.container(border=True):
-                col_info, col_meta, col_btn = st.columns([3, 2, 1])
-                with col_info:
-                    meta_html = (
-                        f"<span style='color: {muted}; font-size: 0.875rem;'>"
-                        f"Estado: {doc.estado} · {pct}% completitud</span>"
-                    )
-                    st.markdown(
-                        f"**{nombre}**  \n{meta_html}",
-                        unsafe_allow_html=True,
-                    )
-                with col_meta:
-                    st.caption(f"Actualizado: {doc.actualizado_en.strftime('%Y-%m-%d %H:%M')}")
-                with col_btn:
+    tab_activos, tab_archivados, tab_papelera = st.tabs(["Activos", "Archivados", "Papelera"])
+    with tab_activos:
+        _render_lista_documentos(repo, user_id, modo="activos")
+    with tab_archivados:
+        _render_lista_documentos(repo, user_id, modo="archivados")
+    with tab_papelera:
+        _render_lista_documentos(repo, user_id, modo="papelera")
+
+
+def _render_lista_documentos(repo: DocumentoRepository, user_id: str, *, modo: str) -> None:
+    """Renderiza una lista de documentos con acciones según el modo."""
+    if modo == "activos":
+        docs = repo.listar_por_usuario(user_id)[:20]
+        vacio_msg = (
+            "Aún no tienes documentos activos. Crea uno nuevo o importa "
+            "un .docx existente para empezar."
+        )
+    elif modo == "archivados":
+        docs = [d for d in repo.listar_por_usuario(user_id, incluir_archivados=True) if d.archivado]
+        vacio_msg = "No tienes documentos archivados."
+    else:  # papelera
+        docs = repo.listar_por_usuario(user_id, solo_papelera=True)
+        vacio_msg = (
+            "Papelera vacía. Los documentos que envíes aquí se purgan "
+            "automáticamente tras 30 días si no los restauras."
+        )
+
+    if not docs:
+        st.caption(vacio_msg)
+        return
+
+    archivar_uc = ArchivarDocumento(repo)
+    muted = SMNYL_COLORS["text_muted"]
+    for doc in docs:
+        nombre = doc.metadata_modelo.nombre_modelo or "Documento sin nombre"
+        pct = int(doc.porcentaje_completitud * 100)
+        with st.container(border=True):
+            col_info, col_meta, col_btn = st.columns([3, 2, 1.2])
+            with col_info:
+                meta_html = (
+                    f"<span style='color: {muted}; font-size: 0.875rem;'>"
+                    f"Estado: {doc.estado} · {pct}% completitud</span>"
+                )
+                st.markdown(
+                    f"**{nombre}**  \n{meta_html}",
+                    unsafe_allow_html=True,
+                )
+            with col_meta:
+                st.caption(f"Actualizado: {doc.actualizado_en.strftime('%Y-%m-%d %H:%M')}")
+            with col_btn:
+                if modo == "activos":
                     if st.button("Abrir", key=f"open_{doc.id}", use_container_width=True):
                         st.session_state["documento_actual_id"] = str(doc.id)
                         st.session_state["pagina"] = "dashboard"
                         st.rerun()
-    else:
-        st.markdown("### Empezar")
-        st.caption(
-            "Aún no tienes documentos. Importa un .docx existente para "
-            "ver tu primer dashboard de brechas."
-        )
+                elif modo == "archivados":
+                    if st.button("Desarchivar", key=f"unarch_{doc.id}", use_container_width=True):
+                        archivar_uc.desarchivar(doc.id, actor=user_id)
+                        st.rerun()
+                else:  # papelera
+                    if st.button("Restaurar", key=f"restore_{doc.id}", use_container_width=True):
+                        archivar_uc.restaurar_de_papelera(doc.id, actor=user_id)
+                        st.rerun()
+
+            # Acciones secundarias (en una segunda fila)
+            if modo == "activos":
+                col_arch, col_pap, _ = st.columns([1, 1, 4])
+                with col_arch:
+                    if st.button(
+                        "📦 Archivar",
+                        key=f"arch_{doc.id}",
+                        use_container_width=True,
+                        help="Oculta este documento de la vista principal sin borrarlo.",
+                    ):
+                        archivar_uc.archivar(doc.id, actor=user_id)
+                        st.rerun()
+                with col_pap:
+                    if st.button(
+                        "🗑️ Papelera",
+                        key=f"trash_{doc.id}",
+                        use_container_width=True,
+                        help="Mueve a papelera. Se purga automáticamente tras 30 días.",
+                    ):
+                        archivar_uc.enviar_a_papelera(doc.id, actor=user_id)
+                        st.rerun()
+            elif modo == "papelera":
+                # Indicar días restantes hasta auto-purge
+                if doc.archivado_en is not None:
+                    from datetime import UTC, datetime, timedelta
+
+                    expira = doc.archivado_en + timedelta(days=30)
+                    dias = max(0, (expira - datetime.now(UTC)).days)
+                    st.caption(f"Se eliminará automáticamente en {dias} día(s).")
 
 
 def main() -> None:
@@ -126,6 +191,17 @@ def main() -> None:
     )
 
     apply_smnyl_theme()
+
+    # Gate de password temporal (mitigación pre-Cognito real, ver Fase A.1.b)
+    if not auth_gate.proteger_app():
+        return
+
+    # Job idempotente: purgar papelera expirada (>30 días). Se ejecuta una vez
+    # por sesión de Streamlit; en EC2 lo ideal es moverlo a un cron del SO.
+    if not st.session_state.get("_purge_papelera_executed"):
+        with contextlib.suppress(Exception):
+            purgar_papelera_expirada(DocumentoRepository())
+        st.session_state["_purge_papelera_executed"] = True
 
     # Inicializar router
     if "pagina" not in st.session_state:

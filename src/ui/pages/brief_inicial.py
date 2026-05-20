@@ -116,23 +116,61 @@ def render() -> None:
         try:
             llm = AnthropicClient()
         except Exception as e:
+            # NO redirigir silencioso: preservar respuestas en session_state
+            # y mostrar opciones explícitas al usuario.
+            st.session_state["brief_respuestas_guardadas"] = respuestas_no_vacias
             st.error(
-                f"Falta configuración de Anthropic API ({e}). Saltando al dashboard "
-                "sin generar borradores."
+                "El asistente de IA no está disponible para generar borradores "
+                f"({e.__class__.__name__}: {e}). Tus respuestas no se han perdido.",
+                icon="🚫",
             )
-            st.session_state["pagina"] = "dashboard"
-            st.rerun()
+            col_retry, col_skip = st.columns([1, 1])
+            with col_retry:
+                if st.button(
+                    "Reintentar conexión con IA",
+                    type="primary",
+                    use_container_width=True,
+                    key="brief_retry",
+                ):
+                    st.rerun()
+            with col_skip:
+                if st.button(
+                    "Continuar sin borradores",
+                    use_container_width=True,
+                    key="brief_skip",
+                ):
+                    st.session_state["pagina"] = "dashboard"
+                    st.rerun()
             return
 
         with st.spinner(
             f"Generando borradores a partir de {len(respuestas_no_vacias)} respuesta(s)…"
         ):
-            aplicadas = AplicarBrief(llm).ejecutar(documento, respuestas_no_vacias)
+            resultado = AplicarBrief(llm).ejecutar(documento, respuestas_no_vacias)
             repo.guardar(documento)
 
-        st.success(
-            f"{aplicadas} sección(es) pre-poblada(s) con borrador. Revisa y edita en el dashboard.",
-            icon="✅",
-        )
+        # Propagar al banner del dashboard, mezclando con cualquier resultado previo
+        # (caso: el usuario subió fuentes en `crear_nuevo` y ahora cierra el brief).
+        prev = st.session_state.get("onboarding_resultado", {}) or {}
+        st.session_state["onboarding_resultado"] = {
+            **prev,
+            "secciones_brief_aplicadas": resultado.secciones_aplicadas,
+            "respuestas_brief_recibidas": resultado.respuestas_recibidas,
+            "brief_errores": list(resultado.errores),
+        }
+
+        if resultado.hubo_errores:
+            st.warning(
+                f"{resultado.secciones_aplicadas} sección(es) pre-poblada(s). "
+                f"{len(resultado.errores)} respuesta(s) no se pudieron procesar "
+                "— revisa las advertencias en el dashboard.",
+                icon="⚠️",
+            )
+        else:
+            st.success(
+                f"{resultado.secciones_aplicadas} sección(es) pre-poblada(s) con borrador. "
+                "Revisa y edita en el dashboard.",
+                icon="✅",
+            )
         st.session_state["pagina"] = "dashboard"
         st.rerun()

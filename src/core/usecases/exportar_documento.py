@@ -68,19 +68,22 @@ class ExportarDocumento:
         if documento is None:
             raise ValueError(f"Documento {documento_id} no encontrado.")
 
-        # Si idioma destino != español, traducir contenido (mutación efímera
-        # sobre la copia cargada de BD; no se persiste el doc traducido).
-        if idioma_objetivo == "en":
+        # Modos que requieren LLM (cualquier traducción/normalización).
+        modos_con_llm = {"en", "es_normalize", "en_normalize"}
+        if idioma_objetivo in modos_con_llm:
             if self.llm is None:
                 raise RuntimeError(
-                    "Traducción al inglés requiere LLM configurado (ANTHROPIC_API_KEY en .env)."
+                    "Esta opción de idioma requiere LLM configurado (ANTHROPIC_API_KEY en .env)."
                 )
-            TraductorDocumento(self.llm).traducir(documento, idioma_objetivo="en")
+            TraductorDocumento(self.llm).traducir(documento, idioma_objetivo=idioma_objetivo)
+
+        # Idioma "físico" para el writer (string ES vs EN dentro del .docx).
+        idioma_writer = "en" if idioma_objetivo in ("en", "en_normalize") else "es"
 
         extractor = TableExtractor(self.llm) if self.llm is not None else None
         writer = DocxWriter(table_extractor=extractor)
-        blob = writer.generar(documento, self.template_path, idioma=idioma_objetivo)
-        nombre = _sugerir_nombre(documento.metadata_modelo.nombre_modelo, idioma=idioma_objetivo)
+        blob = writer.generar(documento, self.template_path, idioma=idioma_writer)
+        nombre = _sugerir_nombre(documento.metadata_modelo.nombre_modelo, idioma=idioma_writer)
 
         # Recargar el doc original para registrar el audit event sin contaminar
         # la BD con el contenido traducido (la traducción solo vive en el .docx).
@@ -92,12 +95,13 @@ class ExportarDocumento:
                     tipo="exportado",
                     descripcion=(
                         f"Documento exportado a .docx ({len(blob):,} bytes) "
-                        f"como '{nombre}' [idioma: {idioma_objetivo}]."
+                        f"como '{nombre}' [modo: {idioma_objetivo}]."
                     ),
                     metadata={
                         "bytes": str(len(blob)),
                         "nombre_archivo": nombre,
-                        "idioma": idioma_objetivo,
+                        "modo_idioma": idioma_objetivo,
+                        "idioma_escritura": idioma_writer,
                     },
                 )
             )

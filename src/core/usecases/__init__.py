@@ -6,13 +6,24 @@ from src.core.usecases.adjuntar_tabla import (
     ResultadoAdjuntar,
     es_seccion_data_heavy,
 )
+from src.core.usecases.archivar_documento import (
+    ArchivarDocumento,
+    ResultadoVisibilidad,
+    purgar_papelera_expirada,
+)
 from src.core.usecases.cambiar_estado import (
     CambiarEstadoDocumento,
     RegistrarSignoff,
     TransicionRechazada,
 )
 from src.core.usecases.crear_documento import CrearDocumentoEnBlanco
+from src.core.usecases.detectar_modelos_prophet import (
+    DetectarModelosProphet,
+    ModeloProphetInfo,
+    ResultadoDeteccion,
+)
 from src.core.usecases.docx_writer import DocxWriter
+from src.core.usecases.docx_writer_prophet import DocxWriterProphet
 from src.core.usecases.drafter import Drafter
 from src.core.usecases.entrevista_uc import (
     IniciarEntrevista,
@@ -28,25 +39,20 @@ from src.core.usecases.importar_documento import (
     ImportarDocumento,
     ResultadoImportacion,
 )
-from src.core.usecases.interview_engine import InterviewEngine
-from src.core.usecases.knowledge_extractor import KnowledgeExtractor
-from src.core.usecases.omitir_seccion import MOTIVOS_OMISION, OmitirSeccion
-from src.core.usecases.table_extractor import TableExtractor, TableSchema
-from src.core.usecases.detectar_modelos_prophet import (
-    DetectarModelosProphet,
-    ModeloProphetInfo,
-    ResultadoDeteccion,
-)
 from src.core.usecases.importar_registro_prophet import (
     ImportarRegistroProphet,
     ResultadoImportacionProphet,
 )
-from src.core.usecases.docx_writer_prophet import DocxWriterProphet
+from src.core.usecases.interview_engine import InterviewEngine
+from src.core.usecases.knowledge_extractor import KnowledgeExtractor
+from src.core.usecases.omitir_seccion import MOTIVOS_OMISION, OmitirSeccion
+from src.core.usecases.table_extractor import TableExtractor, TableSchema
 
 __all__ = [
     "MOTIVOS_OMISION",
     "SECCIONES_DATA_HEAVY",
     "AdjuntarTablaApendice",
+    "ArchivarDocumento",
     "CambiarEstadoDocumento",
     "CrearDocumentoEnBlanco",
     "DetectarModelosProphet",
@@ -69,9 +75,11 @@ __all__ = [
     "ResultadoExportacion",
     "ResultadoImportacion",
     "ResultadoImportacionProphet",
+    "ResultadoVisibilidad",
     "TableExtractor",
     "TableSchema",
     "TransicionRechazada",
     "TurnoEntrevista",
     "es_seccion_data_heavy",
+    "purgar_papelera_expirada",
 ]

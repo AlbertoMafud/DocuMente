@@ -25,9 +25,9 @@ def _excel_con_modelos(filas: list[dict[str, Any]]) -> bytes:
 
 
 def test_detecta_modelo_unico() -> None:
-    xlsx = _excel_con_modelos([
-        {"Area": "Rentabilidad", "Proceso": "VNB", "Encargado": "Francisco Carmona"}
-    ])
+    xlsx = _excel_con_modelos(
+        [{"Area": "Rentabilidad", "Proceso": "VNB", "Encargado": "Francisco Carmona"}]
+    )
     uc = DetectarModelosProphet(llm=None)
     resultado = uc.ejecutar(xlsx)
     assert len(resultado.modelos) == 1
@@ -36,10 +36,12 @@ def test_detecta_modelo_unico() -> None:
 
 
 def test_detecta_multiples_modelos() -> None:
-    xlsx = _excel_con_modelos([
-        {"Proceso": "VNB", "Encargado": "Carmona"},
-        {"Proceso": "IRR", "Encargado": "Cynthia"},
-    ])
+    xlsx = _excel_con_modelos(
+        [
+            {"Proceso": "VNB", "Encargado": "Carmona"},
+            {"Proceso": "IRR", "Encargado": "Cynthia"},
+        ]
+    )
     uc = DetectarModelosProphet(llm=None)
     resultado = uc.ejecutar(xlsx)
     assert len(resultado.modelos) == 2
@@ -64,10 +66,12 @@ def test_bytes_invalidos_devuelve_advertencia() -> None:
 
 
 def test_fila_idx_es_base_cero() -> None:
-    xlsx = _excel_con_modelos([
-        {"Proceso": "VNB", "Encargado": "Carmona"},
-        {"Proceso": "IRR", "Encargado": "Cynthia"},
-    ])
+    xlsx = _excel_con_modelos(
+        [
+            {"Proceso": "VNB", "Encargado": "Carmona"},
+            {"Proceso": "IRR", "Encargado": "Cynthia"},
+        ]
+    )
     uc = DetectarModelosProphet(llm=None)
     resultado = uc.ejecutar(xlsx)
     assert resultado.modelos[0].fila_idx == 0

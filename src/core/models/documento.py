@@ -25,6 +25,7 @@ from src.core.models.seccion import Seccion
 
 TipoDocumento = Literal["model_development", "prophet"]
 EstadoDocumento = Literal["draft", "in_review", "approved", "published", "retired"]
+EstadoVisibilidad = Literal["activo", "archivado", "papelera"]
 TierRiesgo = Literal[
     "low",
     "medium_minus",
@@ -97,6 +98,21 @@ class Documento(BaseModel):
             "backward-compatibility con documentos persistidos previos."
         ),
     )
+    # Estado de visibilidad — independiente del ciclo MRM `estado`. Un doc
+    # puede estar `approved` + `archivado` simultáneamente (quedó histórico).
+    # Campos aditivos con default — preservan backward-compat con docs persistidos.
+    archivado: bool = Field(
+        default=False,
+        description="True si el doc está oculto de la vista principal de home.",
+    )
+    archivado_en: datetime | None = Field(
+        default=None,
+        description="Timestamp del último cambio de visibilidad (archivado o papelera).",
+    )
+    en_papelera: bool = Field(
+        default=False,
+        description="True si se movió a papelera. Se purga tras 30 días si no se restaura.",
+    )
 
     def seccion_por_id(self, seccion_id: str) -> Seccion | None:
         """Devuelve la sección por su ID o None."""
@@ -133,3 +149,17 @@ class Documento(BaseModel):
         """Agrega un evento al audit_trail y actualiza `actualizado_en`."""
         self.audit_trail.append(evento)
         self.actualizado_en = datetime.now(UTC)
+
+    @property
+    def visibilidad(self) -> EstadoVisibilidad:
+        """Estado de visibilidad derivado.
+
+        - `papelera` si `en_papelera` es True (tiene precedencia).
+        - `archivado` si `archivado` es True.
+        - `activo` en cualquier otro caso.
+        """
+        if self.en_papelera:
+            return "papelera"
+        if self.archivado:
+            return "archivado"
+        return "activo"

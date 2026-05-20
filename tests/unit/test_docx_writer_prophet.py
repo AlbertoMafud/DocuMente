@@ -8,19 +8,28 @@ from docx import Document as DocxDocument
 
 from src.core.models import Documento
 from src.core.models.documento import MetadataModelo
-from src.core.usecases.docx_writer_prophet import DocxWriterProphet
 from src.core.template_catalog_prophet import construir_secciones_vacias_prophet
+from src.core.usecases.docx_writer_prophet import DocxWriterProphet
 
 
 def _doc_prophet_con_runs(nombre: str = "Modelo VNB") -> Documento:
     secciones = construir_secciones_vacias_prophet()
-    runs_data = json.dumps({
-        "filas": [
-            {"numero": "33", "detalle": "IL UDI", "es_alm": "No", "tiempo_ejecucion": "45 min",
-             "corrida_precedente": "", "outputs_principales": "VNB", "responsable": "Carmona"},
-        ],
-        "advertencias": [],
-    })
+    runs_data = json.dumps(
+        {
+            "filas": [
+                {
+                    "numero": "33",
+                    "detalle": "IL UDI",
+                    "es_alm": "No",
+                    "tiempo_ejecucion": "45 min",
+                    "corrida_precedente": "",
+                    "outputs_principales": "VNB",
+                    "responsable": "Carmona",
+                },
+            ],
+            "advertencias": [],
+        }
+    )
     for s in secciones:
         if s.id == "corridas_runs":
             s.contenido = runs_data

@@ -2,8 +2,12 @@
 
 Renderiza:
 - Header con breadcrumbs.
-- Form con 2 campos: nombre del modelo + model_id.
-- Al submit: crea el Documento esqueleto, lo persiste, y redirige a onboarding.
+- Aviso prominente si Anthropic API no está configurada (las sugerencias
+  automáticas se desactivan, pero el flujo manual sigue disponible).
+- Form con 2 campos: nombre del modelo + model_id + uploader de fuentes.
+- Al submit: crea el Documento esqueleto, lo persiste, guarda en session_state
+  el `ResultadoCrearDocumento` para que el dashboard muestre el banner de
+  prellenado, y redirige a onboarding.
 """
 
 from __future__ import annotations
@@ -19,12 +23,12 @@ from src.ui.components import header
 from src.ui.theme import SMNYL_COLORS
 
 
-def _construir_use_case() -> CrearDocumentoEnBlanco:
+def _intentar_construir_llm() -> tuple[AnthropicClient | None, str | None]:
+    """Devuelve (cliente, mensaje_error). Solo uno está poblado."""
     try:
-        llm: AnthropicClient | None = AnthropicClient()
-    except Exception:
-        llm = None
-    return CrearDocumentoEnBlanco(repo=DocumentoRepository(), llm=llm)
+        return AnthropicClient(), None
+    except Exception as e:
+        return None, str(e)
 
 
 def render() -> None:
@@ -43,6 +47,16 @@ def render() -> None:
         """,
         unsafe_allow_html=True,
     )
+
+    llm, llm_error = _intentar_construir_llm()
+    if llm is None:
+        st.warning(
+            "El asistente de IA no está disponible "
+            f"({llm_error or 'sin configuración de Anthropic API'}). "
+            "Podrás crear el documento y trabajarlo manualmente, pero las "
+            "sugerencias automáticas a partir de fuentes adicionales se omitirán.",
+            icon="⚠️",
+        )
 
     with st.form("crear_documento", clear_on_submit=False):
         st.markdown("### Identificación del modelo")
@@ -95,13 +109,13 @@ def render() -> None:
             for f in fuentes_subidas:
                 fuentes_payload.append((BytesIO(f.getvalue()), f.name))
 
-        uc = _construir_use_case()
+        uc = CrearDocumentoEnBlanco(repo=DocumentoRepository(), llm=llm)
         try:
             with st.spinner(
                 "Creando documento"
                 + (f" y procesando {len(fuentes_payload)} fuente(s)…" if fuentes_payload else "…")
             ):
-                doc = uc.ejecutar(
+                resultado = uc.ejecutar(
                     nombre_modelo=nombre,
                     model_id=model_id,
                     fuentes_adicionales=fuentes_payload or None,
@@ -110,6 +124,14 @@ def render() -> None:
             st.error(f"No se pudo crear el documento: {e}")
             return
 
-        st.session_state["documento_actual_id"] = str(doc.id)
+        st.session_state["documento_actual_id"] = str(resultado.documento.id)
+        # Banner del dashboard tras onboarding/brief
+        st.session_state["onboarding_resultado"] = {
+            "secciones_prellenadas": resultado.secciones_prellenadas,
+            "fuentes_extraidas": resultado.fuentes_extraidas,
+            "fuentes_descartadas": list(resultado.fuentes_descartadas),
+            "advertencias": list(resultado.advertencias),
+            "llm_disponible": resultado.llm_disponible,
+        }
         st.session_state["pagina"] = "onboarding"
         st.rerun()

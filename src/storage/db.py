@@ -11,13 +11,14 @@ Decisiones que pagan dividendos en la migración a EC2:
 
 from __future__ import annotations
 
+import logging
 import os
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
-from sqlalchemy import DateTime, String, Text, create_engine
+from sqlalchemy import Boolean, Column, DateTime, String, Text, create_engine, inspect, text
 from sqlalchemy.orm import (
     DeclarativeBase,
     Mapped,
@@ -25,6 +26,8 @@ from sqlalchemy.orm import (
     mapped_column,
     sessionmaker,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _resolver_database_url() -> str:
@@ -56,6 +59,13 @@ class DocumentoRow(Base):
     payload_json: Mapped[str] = mapped_column(Text, nullable=False)
     creado_en: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
     actualizado_en: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
+    # Columnas de visibilidad (Fase A.5).
+    archivado: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    en_papelera: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    # `archivado_en` es nullable y SQLAlchemy en Python 3.14 tiene un quirk con
+    # `Mapped[datetime | None]` — usamos la forma Column clásica (sin Mapped)
+    # que sigue siendo válida en SQLAlchemy 2.x.
+    archivado_en = Column(DateTime, nullable=True, default=None)
 
 
 class EstadoEntrevistaRow(Base):
@@ -82,7 +92,49 @@ def get_engine():  # type: ignore[no-untyped-def]
     if _engine is None:
         _engine = create_engine(_resolver_database_url(), echo=False, future=True)
         Base.metadata.create_all(_engine)
+        _aplicar_migraciones_aditivas(_engine)
     return _engine
+
+
+def _aplicar_migraciones_aditivas(engine) -> None:  # type: ignore[no-untyped-def]
+    """Aplica migraciones aditivas idempotentes al boot.
+
+    NUNCA destructivas — solo `ALTER TABLE ... ADD COLUMN` con default seguro.
+    Si la columna ya existe, se ignora. Esto cubre BD viejas creadas antes
+    de que se agregaran columnas nuevas.
+
+    Migraciones aplicadas:
+    - Fase A.5: columnas `archivado`, `en_papelera`, `archivado_en` en `documentos`.
+    """
+    inspector = inspect(engine)
+    if "documentos" not in inspector.get_table_names():
+        return  # tabla aún no existe (no debería pasar tras create_all)
+
+    cols_existentes = {col["name"] for col in inspector.get_columns("documentos")}
+    migraciones: list[tuple[str, str]] = [
+        # (nombre_columna, DDL para agregarla)
+        ("archivado", "ALTER TABLE documentos ADD COLUMN archivado BOOLEAN NOT NULL DEFAULT 0"),
+        (
+            "en_papelera",
+            "ALTER TABLE documentos ADD COLUMN en_papelera BOOLEAN NOT NULL DEFAULT 0",
+        ),
+        ("archivado_en", "ALTER TABLE documentos ADD COLUMN archivado_en DATETIME"),
+    ]
+
+    with engine.connect() as conn:
+        for nombre_col, ddl in migraciones:
+            if nombre_col not in cols_existentes:
+                try:
+                    conn.execute(text(ddl))
+                    conn.commit()
+                    logger.info("Migración aditiva aplicada: columna '%s' agregada.", nombre_col)
+                except Exception as exc:
+                    logger.warning(
+                        "No se pudo aplicar migración aditiva '%s' (%s) — "
+                        "puede que ya esté aplicada en otra conexión.",
+                        nombre_col,
+                        exc.__class__.__name__,
+                    )
 
 
 def get_session_factory() -> sessionmaker[Session]:

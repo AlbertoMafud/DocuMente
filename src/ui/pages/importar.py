@@ -18,7 +18,7 @@ from pathlib import Path
 import streamlit as st
 
 from src.core.usecases import GapAnalyzer, ImportarDocumento
-from src.docs.reader import DocxReader
+from src.docs.readers.anchor_reader import AnchorReader
 from src.llm import AnthropicClient
 from src.storage.repositories import DocumentoRepository
 from src.storage.storage import FilesystemStorage
@@ -28,15 +28,19 @@ from src.ui.theme import SMNYL_COLORS
 DATA_DIR = Path(__file__).resolve().parent.parent.parent.parent / "data"
 
 
-def _construir_use_case() -> ImportarDocumento:
-    storage = FilesystemStorage(DATA_DIR)
+def _intentar_construir_llm() -> tuple[AnthropicClient | None, str | None]:
+    """Devuelve (cliente, mensaje_error). Solo uno está poblado."""
     try:
-        llm: AnthropicClient | None = AnthropicClient()
-    except Exception:
-        llm = None
+        return AnthropicClient(), None
+    except Exception as e:
+        return None, str(e)
+
+
+def _construir_use_case(llm: AnthropicClient | None) -> ImportarDocumento:
+    storage = FilesystemStorage(DATA_DIR)
     return ImportarDocumento(
         storage=storage,
-        reader=DocxReader(),
+        reader=AnchorReader(),  # despacha .docx vs .pdf automáticamente
         repo=DocumentoRepository(),
         analyzer=GapAnalyzer(),
         llm=llm,
@@ -48,32 +52,53 @@ def render() -> None:
 
     back_button.render(destino="home", etiqueta="← Volver al inicio", key="importar_back")
 
+    llm, llm_error = _intentar_construir_llm()
+    if llm is None:
+        st.warning(
+            "El asistente de IA no está disponible "
+            f"({llm_error or 'sin configuración de Anthropic API'}). "
+            "Podrás importar y trabajar el documento, pero las sugerencias "
+            "automáticas a partir de fuentes adicionales se omitirán.",
+            icon="⚠️",
+        )
+
     st.markdown(
         f"""
         <h1 style="font-family: var(--font-display); color: {SMNYL_COLORS["text"]};
             margin-bottom: 0.5rem;">Importar documento existente</h1>
         <p style="color: {SMNYL_COLORS["text_muted"]}; margin-bottom: 2rem;
             max-width: 720px;">
-            Sube un archivo <code>.docx</code> con documentación de modelo.
-            DocuMente lo analizará contra el Model Development Template oficial
-            de NYL e identificará brechas para que las completes con apoyo de Claude.
+            Sube un archivo <code>.docx</code> o <code>.pdf</code> con documentación
+            de modelo. DocuMente lo analizará contra el Model Development Template
+            oficial de NYL e identificará brechas para que las completes con apoyo
+            de Claude.
         </p>
         """,
         unsafe_allow_html=True,
     )
 
-    st.markdown("### 1. Documento ancla (.docx)")
+    st.markdown("### 1. Documento ancla (.docx o .pdf)")
     archivo = st.file_uploader(
-        "Arrastra el archivo .docx principal aquí",
-        type=["docx"],
+        "Arrastra el archivo .docx o .pdf principal aquí",
+        type=["docx", "pdf"],
         accept_multiple_files=False,
         help=(
             "Este es el documento que da estructura: DocuMente lo parsea contra "
-            "el Model Development Template oficial NYL e identifica brechas."
+            "el Model Development Template oficial NYL e identifica brechas. "
+            "Si subes un PDF, la extracción puede ser menos precisa que con DOCX "
+            "(no tiene info de estilos)."
         ),
         label_visibility="visible",
         key="importar_anchor",
     )
+    if archivo is not None and archivo.name.lower().endswith(".pdf"):
+        st.info(
+            "PDF detectado — DocuMente usa heurística para reconocer secciones. "
+            "Revisa el resultado en el dashboard; las secciones no detectadas "
+            "quedarán vacías y podrás llenarlas con la entrevista o con fuentes "
+            "adicionales.",
+            icon="ℹ️",
+        )
 
     st.markdown(
         "<div style='margin: 1rem 0;'></div>",
@@ -165,7 +190,7 @@ def render() -> None:
             else "Parseando documento y detectando secciones... esto toma 5-15s."
         )
         with st.spinner(spinner_msg):
-            uc = _construir_use_case()
+            uc = _construir_use_case(llm)
             buffer = BytesIO(archivo.getvalue())
             fuentes_payload: list[tuple[BytesIO, str]] = []
             if fuentes_subidas:
@@ -179,6 +204,14 @@ def render() -> None:
 
         # Guardar en session_state para que el dashboard lo lea
         st.session_state["documento_actual_id"] = str(resultado.documento.id)
+        # Banner del dashboard con conteos y advertencias
+        st.session_state["onboarding_resultado"] = {
+            "secciones_prellenadas": resultado.secciones_pre_pobladas,
+            "fuentes_extraidas": resultado.fuentes_procesadas,
+            "fuentes_descartadas": list(resultado.fuentes_descartadas),
+            "advertencias": list(resultado.advertencias),
+            "llm_disponible": resultado.llm_disponible,
+        }
         st.session_state["pagina"] = "dashboard"
         mensaje = (
             f"Documento analizado: "
