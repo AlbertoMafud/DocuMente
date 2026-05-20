@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { BrandLogo } from "@/components/layout/brand-logo";
 
 interface NavItem {
   label: string;
@@ -46,17 +47,15 @@ export function Sidebar() {
 
   return (
     <aside className="hidden lg:flex w-60 shrink-0 flex-col border-r border-smnyl-border bg-smnyl-bg-soft/30">
-      <div className="flex h-16 items-center gap-3 border-b border-smnyl-border px-5">
-        <div className="flex h-9 w-9 items-center justify-center rounded-md bg-smnyl-primary text-white font-display text-base font-bold shadow-smnyl-sm">
-          D
-        </div>
+      <Link href="/" className="flex h-16 items-center gap-3 border-b border-smnyl-border px-5 group">
+        <BrandLogo size={36} className="transition-transform duration-200 group-hover:scale-105" />
         <div className="leading-tight">
           <div className="font-display text-sm font-bold text-smnyl-text">DocuMente</div>
           <div className="text-[0.65rem] uppercase tracking-wider text-smnyl-text-muted">
             SMNYL
           </div>
         </div>
-      </div>
+      </Link>
 
       <nav className="flex-1 space-y-0.5 px-3 py-4">
         {NAV_PRIMARY.map((item) => (
