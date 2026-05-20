@@ -31,7 +31,7 @@ from src.core.usecases import (
 )
 from src.llm import AnthropicClient
 from src.storage.repositories import DocumentoRepository
-from src.ui.components import gap_badge, header, onboarding_banner, seccion_card
+from src.ui.components import empty_state, gap_badge, header, onboarding_banner, seccion_card
 from src.ui.theme import SMNYL_COLORS
 
 _TEMPLATE_PATH = (
@@ -965,7 +965,18 @@ def render() -> None:
     text_color = SMNYL_COLORS["text"]
     muted_color = SMNYL_COLORS["text_muted"]
     if not brechas:
-        st.success("¡No hay brechas detectadas! El documento está listo para revisión.")
+        clicked_export = empty_state.render(
+            titulo="¡Documento listo para revisión!",
+            descripcion=(
+                "No hay brechas detectadas en las secciones obligatorias. Puedes "
+                "exportar el documento o seguir refinando contenido opcional."
+            ),
+            icono="🎉",
+            cta_label="Exportar a DOCX",
+        )
+        if clicked_export:
+            # Reusa el mismo dialog que el botón "Exportar DOCX" del header de gobernanza.
+            _dialog_exportar_docx(documento_id_str)
     else:
         for b in brechas[:10]:
             with st.container(border=True):

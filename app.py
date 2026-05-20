@@ -13,7 +13,7 @@ import streamlit as st
 
 from src.core.usecases import ArchivarDocumento, purgar_papelera_expirada
 from src.storage.repositories import DocumentoRepository
-from src.ui.components import auth_gate, continue_hero, header
+from src.ui.components import auth_gate, continue_hero, empty_state, header
 from src.ui.pages import (
     auditoria,
     brief_inicial,
@@ -154,26 +154,58 @@ def _render_home() -> None:
         _render_lista_documentos(repo, user_id, modo="papelera")
 
 
+def _render_empty_state_tab(modo: str) -> None:
+    """Empty state amigable para tabs sin documentos.
+
+    El tab 'Activos' lleva CTA primario porque su acción esperada es crear
+    o importar; los otros dos son informativos (archivar/restaurar no aplica
+    sin documentos).
+    """
+    if modo == "activos":
+        clicked = empty_state.render(
+            titulo="Aún no tienes documentos activos",
+            descripcion=(
+                "Crea un documento desde cero con las 28 secciones del template oficial NYL, "
+                "importa un .docx existente para mejorarlo, o inicia una Ficha Prophet."
+            ),
+            icono="📄",
+            cta_label="Crear documento",
+        )
+        if clicked:
+            st.session_state["pagina"] = "crear_nuevo"
+            st.rerun()
+    elif modo == "archivados":
+        empty_state.render(
+            titulo="Sin documentos archivados",
+            descripcion=(
+                "Los documentos que archives aparecerán aquí. Archivar no borra: "
+                "el documento se preserva fuera de la vista principal y puedes desarchivarlo "
+                "cuando lo necesites."
+            ),
+            icono="📦",
+        )
+    else:  # papelera
+        empty_state.render(
+            titulo="Papelera vacía",
+            descripcion=(
+                "Los documentos enviados a papelera se eliminan automáticamente tras 30 días "
+                "si no los restauras. Mientras tanto puedes recuperarlos desde aquí."
+            ),
+            icono="🗑️",
+        )
+
+
 def _render_lista_documentos(repo: DocumentoRepository, user_id: str, *, modo: str) -> None:
     """Renderiza una lista de documentos con acciones según el modo."""
     if modo == "activos":
         docs = repo.listar_por_usuario(user_id)[:20]
-        vacio_msg = (
-            "Aún no tienes documentos activos. Crea uno nuevo o importa "
-            "un .docx existente para empezar."
-        )
     elif modo == "archivados":
         docs = [d for d in repo.listar_por_usuario(user_id, incluir_archivados=True) if d.archivado]
-        vacio_msg = "No tienes documentos archivados."
     else:  # papelera
         docs = repo.listar_por_usuario(user_id, solo_papelera=True)
-        vacio_msg = (
-            "Papelera vacía. Los documentos que envíes aquí se purgan "
-            "automáticamente tras 30 días si no los restauras."
-        )
 
     if not docs:
-        st.caption(vacio_msg)
+        _render_empty_state_tab(modo)
         return
 
     archivar_uc = ArchivarDocumento(repo)
