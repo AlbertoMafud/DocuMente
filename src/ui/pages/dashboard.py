@@ -31,7 +31,7 @@ from src.core.usecases import (
 )
 from src.llm import AnthropicClient
 from src.storage.repositories import DocumentoRepository
-from src.ui.components import empty_state, gap_badge, header, onboarding_banner, seccion_card
+from src.ui.components import empty_state, header, onboarding_banner, seccion_card
 from src.ui.theme import SMNYL_COLORS
 
 _TEMPLATE_PATH = (
@@ -412,53 +412,98 @@ def _cargar_documento_y_brechas(
 
 def _render_resumen(documento: Documento, brechas: list[Brecha]) -> None:
     resuelto_pct = int(documento.porcentaje_resuelto * 100)
+    n_oblig = len(documento.secciones_obligatorias)
     n_completas = sum(1 for s in documento.secciones_obligatorias if s.completitud == "completa")
     n_omitidas = sum(1 for s in documento.secciones_obligatorias if s.completitud == "omitida")
     n_alta = sum(1 for b in brechas if b.severidad == "alta")
     n_media = sum(1 for b in brechas if b.severidad == "media")
     n_baja = sum(1 for b in brechas if b.severidad == "baja")
 
-    muted = SMNYL_COLORS["text_muted"]
-    text = SMNYL_COLORS["text"]
-    label_style = (
-        f"font-size: 0.75rem; color: {muted}; text-transform: uppercase; letter-spacing: 0.05em;"
-    )
-    big_style = f"font-size: 2rem; font-weight: 600; color: {text};"
+    c = SMNYL_COLORS
+    # Cards densos: label uppercase pequeño + valor 1.5rem + sub-context discreto.
+    # Borde-izquierda con color de estado para añadir jerarquía visual.
 
-    c1, c2, c3, c4, c5 = st.columns(5)
-    with c1.container(border=True):
-        st.markdown(f"<div style='{label_style}'>Resolución</div>", unsafe_allow_html=True)
-        st.markdown(
-            f"<div style='{big_style}'>{resuelto_pct}%</div>",
-            unsafe_allow_html=True,
-        )
-        st.progress(documento.porcentaje_resuelto)
-        st.caption(f"{n_completas} completa(s)")
-
-    for col, n, severidad, label in [
-        (c2, n_alta, "alta", "Críticas"),
-        (c3, n_media, "media", "Atención"),
-        (c4, n_baja, "baja", "Sugerencias"),
-    ]:
-        with col.container(border=True):
+    def _card(
+        col,
+        *,
+        label: str,
+        value: str,
+        sub: str,
+        accent: str,
+        progress_pct: int | None = None,
+    ) -> None:
+        with col:
+            progress_html = ""
+            if progress_pct is not None:
+                progress_html = (
+                    f"<div style='height: 4px; background: {c['bg_soft']}; "
+                    f"border-radius: 2px; margin-top: 6px; overflow: hidden;'>"
+                    f"<div style='width: {progress_pct}%; height: 100%; "
+                    f"background: {accent}; transition: width 400ms ease-out;'>"
+                    f"</div></div>"
+                )
             st.markdown(
-                f"<div style='{label_style}'>Brechas {label}</div>",
+                f"""
+                <div style="
+                    border: 1px solid {c['border']};
+                    border-left: 3px solid {accent};
+                    border-radius: 10px;
+                    padding: 12px 16px;
+                    background: {c['bg']};
+                    box-shadow: var(--shadow-sm);
+                    height: 100%;
+                ">
+                    <div style="font-size: 0.68rem; color: {c['text_muted']};
+                        text-transform: uppercase; letter-spacing: 0.07em;
+                        font-weight: 600; margin-bottom: 4px;">{label}</div>
+                    <div style="font-family: var(--font-display);
+                        font-size: 1.65rem; font-weight: 600; color: {c['text']};
+                        line-height: 1.1;">{value}</div>
+                    {progress_html}
+                    <div style="font-size: 0.78rem; color: {c['text_muted']};
+                        margin-top: 6px; line-height: 1.3;">{sub}</div>
+                </div>
+                """,
                 unsafe_allow_html=True,
             )
-            st.markdown(f"<div style='{big_style}'>{n}</div>", unsafe_allow_html=True)
-            gap_badge.render(severidad, label)  # type: ignore[arg-type]
 
-    with c5.container(border=True):
-        st.markdown(f"<div style='{label_style}'>Omitidas</div>", unsafe_allow_html=True)
-        st.markdown(f"<div style='{big_style}'>{n_omitidas}</div>", unsafe_allow_html=True)
-        st.markdown(
-            f"<span style='display: inline-block; padding: 2px 10px;"
-            f" border-radius: 999px; background: {SMNYL_COLORS['bg_soft']};"
-            f" color: {SMNYL_COLORS['text_muted']}; font-size: 0.75rem;"
-            f" font-weight: 600; border: 1px solid {SMNYL_COLORS['border']};"
-            f" letter-spacing: 0.02em;'>Resueltas con motivo</span>",
-            unsafe_allow_html=True,
-        )
+    c1, c2, c3, c4, c5 = st.columns(5)
+    _card(
+        c1,
+        label="Resolución",
+        value=f"{resuelto_pct}%",
+        sub=f"{n_completas} de {n_oblig} secciones obligatorias",
+        accent=c["primary"],
+        progress_pct=resuelto_pct,
+    )
+    _card(
+        c2,
+        label="Críticas",
+        value=str(n_alta),
+        sub="bloquean revisión MRM",
+        accent=c["danger"],
+    )
+    _card(
+        c3,
+        label="Atención",
+        value=str(n_media),
+        sub="resolver antes de aprobar",
+        accent=c["warning_dark"],
+    )
+    _card(
+        c4,
+        label="Sugerencias",
+        value=str(n_baja),
+        sub="mejoras opcionales",
+        accent=c["info_dark"],
+    )
+    _card(
+        c5,
+        label="Omitidas",
+        value=str(n_omitidas),
+        sub="resueltas con motivo",
+        accent=c["text_muted"],
+    )
 
 
 def _build_export_uc(documento_id: UUID) -> ExportarDocumento:
@@ -825,6 +870,61 @@ def _render_acciones_estado(documento: Documento, sm: DocumentStateMachine) -> N
                     st.rerun()
 
 
+_SEVERIDAD_LABELS: dict[str, tuple[str, str, str]] = {
+    # severidad -> (label_humano, color_token, ícono Material)
+    "alta": ("Críticas", "danger", "priority_high"),
+    "media": ("Atención", "warning_dark", "warning"),
+    "baja": ("Sugerencias", "info_dark", "lightbulb"),
+}
+
+
+def _render_brechas_agrupadas(
+    brechas: list[Brecha], text_color: str, muted_color: str
+) -> None:
+    """Renderiza las brechas en 3 expanders por severidad — el primer grupo
+    no vacío arranca expandido para guiar la atención (goal-gradient).
+
+    Reemplaza la lista plana de cards (anteriormente 80px/brecha × 20 =
+    ~1600px de scroll) por un accordion compacto con filas indentadas
+    de ~40px cada una.
+    """
+    from collections import defaultdict
+
+    por_sev: dict[str, list[Brecha]] = defaultdict(list)
+    for b in brechas:
+        por_sev[b.severidad].append(b)
+
+    ya_expandido = False
+    for sev_key in ("alta", "media", "baja"):
+        grupo = por_sev.get(sev_key, [])
+        if not grupo:
+            continue
+        label, _color_token, icono_mat = _SEVERIDAD_LABELS[sev_key]
+        expandir = not ya_expandido
+        ya_expandido = ya_expandido or expandir
+        header = f"{label}  ·  {len(grupo)}"
+        with st.expander(header, expanded=expandir, icon=f":material/{icono_mat}:"):
+            for b in grupo:
+                # Fila compacta con borde inferior (no card pesada).
+                msg_html = (
+                    f"<div style='color: {text_color}; font-weight: 500; "
+                    f"line-height: 1.4;'>{b.mensaje}</div>"
+                )
+                if b.sugerencia:
+                    msg_html += (
+                        f"<div style='color: {muted_color}; font-size: 0.85rem; "
+                        f"margin-top: 2px; line-height: 1.4;'>"
+                        f"<span style='font-style: italic;'>Sugerencia:</span> "
+                        f"{b.sugerencia}</div>"
+                    )
+                st.markdown(
+                    f"<div style='padding: 8px 0; "
+                    f"border-bottom: 1px solid {SMNYL_COLORS['border']};'>"
+                    f"{msg_html}</div>",
+                    unsafe_allow_html=True,
+                )
+
+
 def _primer_capitulo_con_pendientes(
     grupos: list[tuple[str, str, list[Seccion]]],
     brechas: list[Brecha],
@@ -920,25 +1020,38 @@ def render() -> None:
 
     header.render(breadcrumbs=["Inicio", nombre, "Dashboard"])
 
-    # Título y meta
-    col_titulo, col_edit = st.columns([5, 1])
+    # Hero compacto: nombre + pill de estado inline + cluster de meta + acción metadata.
+    etiqueta_estado, color_estado = _ETIQUETA_ESTADO[documento.estado]
+    text = SMNYL_COLORS["text"]
+    muted = SMNYL_COLORS["text_muted"]
+    col_titulo, col_edit = st.columns([6, 1.2])
     with col_titulo:
         st.markdown(
             f"""
-            <h1 style="font-family: var(--font-display); margin-bottom: 0.25rem;">{nombre}</h1>
-            <p style="color: {SMNYL_COLORS["text_muted"]}; margin-bottom: 2rem;">
-                Estado: <strong>{documento.estado}</strong> ·
-                {len(documento.secciones)} secciones del template ·
+            <div style="display: flex; align-items: center; gap: 14px;
+                margin-bottom: 6px; flex-wrap: wrap;">
+                <h1 style="font-family: var(--font-display);
+                    font-size: 1.75rem; font-weight: 600;
+                    color: {text}; margin: 0; line-height: 1.15;">{nombre}</h1>
+                <span style="display: inline-block; padding: 3px 12px;
+                    border-radius: 999px; background: {color_estado}1a;
+                    color: {color_estado}; font-size: 0.72rem;
+                    font-weight: 700; letter-spacing: 0.06em;
+                    text-transform: uppercase;">{etiqueta_estado}</span>
+            </div>
+            <div style="color: {muted}; font-size: 0.85rem; margin-bottom: 1.25rem;">
+                {len(documento.secciones)} secciones ·
                 {len(documento.audit_trail)} eventos en audit trail
-            </p>
+            </div>
             """,
             unsafe_allow_html=True,
         )
     with col_edit:
-        st.markdown("<div style='height: 0.6rem;'></div>", unsafe_allow_html=True)
+        st.markdown("<div style='height: 0.25rem;'></div>", unsafe_allow_html=True)
         if st.button(
             "Editar metadata",
             use_container_width=True,
+            icon=":material/edit:",
             help="Editar nombre, ID, FAE, owner, versión y tier del modelo.",
             key=f"edit_meta_{documento.id}",
         ):
@@ -999,7 +1112,7 @@ def render() -> None:
 
     # Sección: brechas críticas priorizadas
     st.markdown("### Brechas críticas")
-    st.caption("Ordenadas por severidad. Empieza por las marcadas como Críticas.")
+    st.caption("Agrupadas por severidad. Empieza por las marcadas como Críticas.")
 
     text_color = SMNYL_COLORS["text"]
     muted_color = SMNYL_COLORS["text_muted"]
@@ -1017,27 +1130,9 @@ def render() -> None:
             # Reusa el mismo dialog que el botón "Exportar DOCX" del header de gobernanza.
             _dialog_exportar_docx(documento_id_str)
     else:
-        for b in brechas[:10]:
-            with st.container(border=True):
-                col_badge, col_msg = st.columns([1, 6])
-                with col_badge:
-                    gap_badge.render(b.severidad)
-                with col_msg:
-                    msg_style = f"color: {text_color}; font-weight: 500;"
-                    sug_style = f"color: {muted_color}; font-size: 0.875rem; margin-top: 4px;"
-                    st.markdown(
-                        f"<div style='{msg_style}'>{b.mensaje}</div>",
-                        unsafe_allow_html=True,
-                    )
-                    if b.sugerencia:
-                        st.markdown(
-                            f"<div style='{sug_style}'>💡 {b.sugerencia}</div>",
-                            unsafe_allow_html=True,
-                        )
-        if len(brechas) > 10:
-            st.caption(f"… y {len(brechas) - 10} brechas adicionales.")
+        _render_brechas_agrupadas(brechas, text_color, muted_color)
 
-    st.markdown("<div style='height: 2.5rem;'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='height: 2rem;'></div>", unsafe_allow_html=True)
 
     # Sección: grid de secciones
     st.markdown("### Secciones del Model Development Template")

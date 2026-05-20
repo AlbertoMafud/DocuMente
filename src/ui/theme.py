@@ -43,8 +43,8 @@ SMNYL_SPACING: dict[str, str] = {
     "sm": "8px",
     "md": "16px",
     "lg": "24px",
-    "xl": "40px",
-    "2xl": "64px",
+    "xl": "32px",
+    "2xl": "56px",
 }
 
 SMNYL_RADIUS: dict[str, str] = {
@@ -54,9 +54,9 @@ SMNYL_RADIUS: dict[str, str] = {
 }
 
 SMNYL_SHADOW: dict[str, str] = {
-    "sm": "0 1px 2px rgba(10, 60, 83, 0.06)",
-    "md": "0 4px 12px rgba(10, 60, 83, 0.08)",
-    "lg": "0 12px 32px rgba(10, 60, 83, 0.12)",
+    "sm": "0 1px 2px rgba(10, 60, 83, 0.05), 0 1px 1px rgba(10, 60, 83, 0.03)",
+    "md": "0 4px 12px rgba(10, 60, 83, 0.08), 0 2px 4px rgba(10, 60, 83, 0.04)",
+    "lg": "0 16px 40px rgba(10, 60, 83, 0.14), 0 4px 8px rgba(10, 60, 83, 0.06)",
 }
 
 
@@ -131,9 +131,9 @@ def _build_css() -> str:
         line-height: 1.2;
     }}
 
-    h1 {{ font-size: 2.25rem; font-weight: 600; margin-bottom: var(--space-md); }}
-    h2 {{ font-size: 1.75rem; font-weight: 500; margin-top: var(--space-xl); }}
-    h3 {{ font-size: 1.25rem; font-weight: 500; }}
+    h1 {{ font-size: 1.875rem; font-weight: 600; margin-bottom: var(--space-sm); letter-spacing: -0.015em; }}
+    h2 {{ font-size: 1.5rem; font-weight: 600; margin-top: var(--space-xl); letter-spacing: -0.01em; }}
+    h3 {{ font-size: 1.15rem; font-weight: 600; }}
 
     p, li, span, label {{
         font-family: var(--font-body);
@@ -272,9 +272,9 @@ def _build_css() -> str:
 
     /* Reduce el padding extra default del bloque principal */
     .block-container {{
-        padding-top: var(--space-xl);
+        padding-top: var(--space-lg);
         padding-bottom: var(--space-2xl);
-        max-width: 1200px;
+        max-width: 1320px;
     }}
     </style>
     """
