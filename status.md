@@ -2,26 +2,37 @@
 
 > Estado vivo del proyecto. Se lee al iniciar sesión y se actualiza al cerrar si hubo cambios significativos.
 
-**Última actualización:** 2026-05-19 (sesión 13 marathón — Fase A + B + C completas, D.2 auditoría frontend cerrada, 4 audits + plan de migración Next.js escrito, breadcrumb clickeable, app validada en localhost:8502)
+**Última actualización:** 2026-05-20 (sesión 14 maratón — a11y AA + 10 Quick Wins UX + Premium T1 + **rewrite completo a FastAPI + Next.js 14 (F1→F4)**. Frontend premium con paridad funcional total con Streamlit. 18 commits sobre `main`.)
 
 ---
 
 ## Estado actual
 
-**MVP + Prophet Fase 0 + Fase A + Fase B + Fase C + D.2 del plan de remediación S13→S16 completas.** Solo A.1.c (Cognito multi-tenant real) queda bloqueado pendiente reunión Vidal. D.1 (Prophet correctivos + demo MA) pendiente.
+**MVP + Prophet Fase 0 + Fase A + B + C + D.2 (S13) + Remediación UX completa + Rewrite arquitectónico a 3 servicios (S14)** todo en el branch `claude/affectionate-noether-8e038f`. Solo A.1.c (Cognito multi-tenant real) queda bloqueado pendiente reunión Vidal. D.1 (Prophet correctivos + demo MA) pendiente.
+
+**Arquitectura nueva (S14):** la app ahora tiene 3 servicios coexistentes:
+
+| Servicio | Puerto | Stack | Estado |
+|---|---|---|---|
+| **Frontend Next.js premium** | 3000 (dev: 3002) | Next.js 14 + Tailwind + shadcn/ui + TanStack Query | NUEVO — paridad funcional con Streamlit |
+| **API REST FastAPI** | 8001 | FastAPI + Pydantic + uvicorn | NUEVO — 46 endpoints, OpenAPI 3.1, Swagger en /docs |
+| Streamlit (legacy) | 8052 | Streamlit + theme SMNYL | Preservado por compatibilidad — same DB |
+
+Ambos frontends consumen los mismos use cases en `src/core/usecases/`. El dominio Python no cambió.
 
 **Repo GitHub `AlbertoMafud/DocuMente`:**
-- `main` congelada en `51d845e` (MVP estable, sin cambios — el plan dice que main queda intacta hasta que Vidal valide deploy).
-- `feat/remediacion-s13-s16` con todo el trabajo de S13. Última subida: pendiente al cierre de S13 (hay commit local + push después de actualizar status).
+- `main` congelada en `51d845e` (MVP estable — el plan dice que main queda intacta hasta que Vidal valide deploy).
+- **`claude/affectionate-noether-8e038f`** con todo el trabajo S13 + S14 (18 commits sobre main). Push pendiente al cierre de S14.
+- `feat/remediacion-s13-s16` aún existe en GitHub con el snapshot S13 puro.
 
-**Tests: 386+ pasando** (de 263 baseline al inicio de S13 → +123 nuevos en la sesión 13 entera), ruff check + format clean, 0 regresiones.
+**Tests: 457 pasando** (429 unit + 28 integration smoke de API). Ruff check + format clean. ESLint frontend clean. TypeScript `--noEmit` clean. 0 regresiones.
 
-**Próximo inmediato (sesión 14):**
-1. **Validación visual de breadcrumb** y demás features Fase B+C en `localhost:8502`.
-2. **5 fixes a11y críticos** (~2h): agregar tokens `success_dark`, `warning_dark`, `info_dark` al theme y refactor de seccion_card, gap_badge, timeline. **Resuelve los 5 críticos WCAG AA** del audit de a11y.
-3. **Top 10 quick wins UX** (~3-4 días, opcional antes de Prophet) — ver `docs/superpowers/specs/2026-05-19-uiux-pro-max-audit.md` §6.
-4. **D.1 Prophet correctivos**: template SMNYL completo + botón "Exportar Ficha Prophet" + demo Carmona/Cynthia/Magallanes.
-5. **Compartir audits + plan Next.js con Vidal** y agendar reunión A.1.a para resolver Cognito.
+**Próximo inmediato (sesión 15):**
+1. **Probar entrevista LLM** en localhost:3002 (requiere copiar `.env` al worktree — `cp /c/Users/alber/Claude_AI/proyectos/DocuMente/.env .env`).
+2. **Compartir con Vidal** los docs `HANDOFF_VIDAL.md`, `ARQUITECTURA.md`, `MIGRATION_TO_EC2.md` (actualizado) y agendar reunión Cognito.
+3. **Decisión merge a main**: cuando Vidal apruebe la arquitectura → PR + merge.
+4. **Depuración post-merge** según `docs/ARCHIVOS_AUDITORIA.md` — eliminar archivos personales/obsoletos.
+5. **D.1 Prophet correctivos + demo MA**: template SMNYL completo + demo Carmona/Cynthia/Magallanes. Ya no bloqueado por UX/rewrite.
 
 ---
 
@@ -879,7 +890,109 @@ Auditoría adicional aplicando **UX laws + 99 reglas del skill ui-ux-pro-max**:
 
 ---
 
-## Lo que sigue — sesión 14
+## Progreso de sesión 14 (2026-05-20)
+
+Sesión maratónica. Ejecuté todo el plan de remediación UX (S13→S16) + rewrite arquitectónico completo a Next.js + FastAPI. **18 commits sobre main**, 457 tests verdes, paridad funcional total entre Streamlit (legacy) y Next.js (nuevo).
+
+### Bloque 1 — Remediación UX (commits c2a3b1a → c6c1b9b)
+
+**a11y WCAG 2.1 AA** (commit `c2a3b1a`):
+- 5 fixes críticos: tokens `success_dark`, `warning_dark`, `info_dark` agregados a `theme.py`
+- Refactor de `seccion_card`, `gap_badge`, `timeline`, `vista_previa` para usar `*_dark` como texto
+- Helper `_contrast_ratio()` sRGB con verificación AA ≥4.5:1 en tests automatizados
+
+**Top 10 Quick Wins UX** (commits `0163675`, `c924117`, `9c226c2`, `0dc68cc`, `8b8c85a`, `e25a535`, `aebfee4`, `1bee041`, `d3ea1bf`, `de14aec`):
+- QW#1 Stepper visual reusable + integración en onboarding/brief
+- QW#2 Hero "Continúa donde te quedaste" con tiempo relativo
+- QW#3 Empty states con CTA en tabs vacíos + celebración cero brechas
+- QW#4 Dashboard agrupado por capítulo NYL en accordion (9 capítulos)
+- QW#5 Tokens `*_soft` globales + eliminación de hex hardcoded
+- QW#6 Banner "Deshacer" post archivar/papelera (pattern Gmail)
+- QW#7 `st.balloons()` + toast 🎉 al primer export DOCX
+- QW#8 Indicador "Guardado hace X" en editores MRM y Prophet
+- QW#9 Emojis funcionales → Material Symbols (`:material/archive:`, etc.)
+- QW#10 Microinteracciones `transition: all 200ms ease-out` global
+
+**Premium polish T1** (commit `c6c1b9b`):
+- Brechas críticas en accordion por severidad (Críticas/Atención/Sugerencias)
+- Hero compacto del dashboard (nombre + pill + meta en 1 fila)
+- 5 cards de métricas refactorizadas con border-left + mini progress bar
+- Density global: H1 2.25→1.875rem, max-width 1200→1320px, shadows con 2 capas
+
+### Bloque 2 — Rewrite arquitectónico (commits 6854547 → 1cac71a)
+
+**F1 — API REST FastAPI** (commit `6854547`):
+- 11 routers, 46 endpoints, OpenAPI 3.1 auto-generado en `/docs`
+- DTOs Pydantic en `src/api/schemas/` separados del dominio
+- Auth bearer token reutilizando `DOCUMENTE_GATE_PASSWORD`
+- CORS abierto en dev (`*`) — restringir en prod
+- 28 smoke tests con httpx.TestClient
+- Cero cambios al dominio o repos — los use cases existentes siguen intactos
+- Coexiste con Streamlit en la misma BD
+
+**F2 — Next.js 14 skeleton** (commit `0b4700f`):
+- Next.js 14 App Router + TypeScript estricto + Tailwind + shadcn/ui
+- Sidebar fijo 240px + topbar sticky + main shell
+- Tokens SMNYL portados de `theme.py` a `tailwind.config.ts`
+- TanStack Query + sonner para toasts
+- Home con ContinueHero/WelcomeHero + DocumentList con tabs (Activos/Archivados/Papelera)
+- 380 packages npm; build OK
+
+**F3 — 5 páginas core** (commit `041e154`):
+- `/documentos/[id]` dashboard premium (hero + métricas + brechas accordion + secciones por capítulo)
+- `/documentos/crear` form con tipo MRM/Prophet
+- `/importar` drop zone .docx/.pdf + fuentes adicionales
+- `/documentos/[id]/secciones/[sid]` editor inline split (textarea + preview)
+- `/prophet` flujo 2 pasos (detectar Excel → crear ficha)
+- Fix retroactivo: `.gitignore` raíz tenía `lib/` (regla Python) que ignoraba silenciosamente `frontend/src/lib/` — agregada excepción
+
+**F4 — 8 páginas restantes + governance** (commit `1cac71a`):
+- `/documentos/[id]/metadata` form con 17 campos MRM
+- `/documentos/[id]/auditoria` timeline vertical con 17 tipos de evento
+- `/documentos/[id]/vista-previa` render tipo paper + Exportar
+- `/documentos/[id]/entrevista/[sid]` chat LLM con bubbles + auto-scroll + indicador escribiendo
+- `/documentos/[id]/versiones` snapshots inmutables + crear con comentario
+- `/documentos/[id]/apendices` tabs (tabla/PDF/LaTeX) + upload + lista
+- `/documentos/[id]/onboarding` 6 campos con Stepper visual
+- `/documentos/[id]/brief` textarea ejecutiva
+- **GovernanceCard** en dashboard con state machine + signoffs Reviewer/FAE
+- **QuickLinks chips** bajo el hero para navegación rápida
+
+### Docs generados al cierre
+
+| Doc | Propósito |
+|---|---|
+| `docs/HANDOFF_VIDAL.md` | Snapshot main → branch para Vidal: arquitectura, env vars, deps, checklist deploy |
+| `docs/ARQUITECTURA.md` | Doc técnico atemporal — la arquitectura actual en 3 servicios |
+| `docs/GUIA_DOCUMENTE.md` | Guía conceptual + walkthrough técnico simplificado, en español sencillo |
+| `docs/MIGRATION_TO_EC2.md` | Actualizado con servicios nuevos (FastAPI, Next.js) |
+| `docs/ARCHIVOS_AUDITORIA.md` | Inventario: vivos / candidatos a borrar / personales — base para depuración post-merge |
+
+### Tests + calidad
+
+- **Backend**: 457 tests pasando (429 unit + 28 integration de la API).
+- **Frontend**: TypeScript `--noEmit` clean, ESLint sin warnings, todas las rutas responden 200 OK.
+- `ruff check` clean. `ruff format` aplicado.
+- 0 regresiones — todo el código Python preexistente sigue funcionando.
+
+### Estado al cierre absoluto de S14
+
+| Tarea | Estado |
+|---|---|
+| 5 fixes a11y WCAG AA | ✅ committed `c2a3b1a` |
+| Top 10 Quick Wins UX | ✅ 10/10 committed |
+| Premium polish T1 (densidad, brechas accordion) | ✅ committed `c6c1b9b` |
+| F1 API REST FastAPI | ✅ committed `6854547` — 46 endpoints |
+| F2 Next.js skeleton + home | ✅ committed `0b4700f` |
+| F3 5 páginas core | ✅ committed `041e154` |
+| F4 8 páginas + governance + quick links | ✅ committed `1cac71a` |
+| Docs handoff/arquitectura/guía/auditoría | ✅ commit final S14 |
+| **A.1.c Cognito real** | ⏸️ pendiente reunión Vidal |
+| **D.1 Prophet correctivos + demo MA** | ⏸️ siguiente prioridad |
+
+---
+
+## Lo que sigue — sesión 15
 
 ### Path crítico inmediato
 
