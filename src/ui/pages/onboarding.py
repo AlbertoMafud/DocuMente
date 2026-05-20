@@ -15,8 +15,10 @@ from uuid import UUID
 import streamlit as st
 
 from src.storage.repositories import DocumentoRepository
-from src.ui.components import back_button, header
+from src.ui.components import back_button, header, stepper
 from src.ui.theme import SMNYL_COLORS
+
+_PASOS_FLUJO = ["Crear / Importar", "Onboarding", "Brief", "Dashboard"]
 
 
 def render() -> None:
@@ -41,6 +43,8 @@ def render() -> None:
     header.render(breadcrumbs=["Inicio", nombre_modelo, "Onboarding"])
 
     back_button.render(destino="home", etiqueta="← Volver al inicio", key="onboarding_back")
+
+    stepper.render(_PASOS_FLUJO, actual_idx=1)
 
     text_color = SMNYL_COLORS["text"]
     muted = SMNYL_COLORS["text_muted"]

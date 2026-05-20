@@ -10,6 +10,7 @@ from src.ui.components import (
     loading_state,
     onboarding_banner,
     seccion_card,
+    stepper,
     timeline,
 )
 
@@ -23,5 +24,6 @@ __all__ = [
     "loading_state",
     "onboarding_banner",
     "seccion_card",
+    "stepper",
     "timeline",
 ]

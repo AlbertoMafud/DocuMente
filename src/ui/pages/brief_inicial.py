@@ -17,8 +17,10 @@ import streamlit as st
 from src.core.usecases.aplicar_brief import PREGUNTAS_BRIEF, AplicarBrief
 from src.llm import AnthropicClient
 from src.storage.repositories import DocumentoRepository
-from src.ui.components import back_button, header
+from src.ui.components import back_button, header, stepper
 from src.ui.theme import SMNYL_COLORS
+
+_PASOS_FLUJO = ["Crear / Importar", "Onboarding", "Brief", "Dashboard"]
 
 
 def _doc_tiene_secciones_pobladas(documento_id: UUID, repo: DocumentoRepository) -> bool:
@@ -52,6 +54,8 @@ def render() -> None:
     header.render(breadcrumbs=["Inicio", nombre_modelo, "Brief inicial"])
 
     back_button.render(destino="dashboard", etiqueta="← Saltar e ir al dashboard", key="brief_back")
+
+    stepper.render(_PASOS_FLUJO, actual_idx=2)
 
     text = SMNYL_COLORS["text"]
     muted = SMNYL_COLORS["text_muted"]
