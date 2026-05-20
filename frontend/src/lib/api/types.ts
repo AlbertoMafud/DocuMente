@@ -1,12 +1,19 @@
 /**
- * Tipos TypeScript de la API DocuMente.
+ * Tipos TypeScript de la API DocuMente — versión "amigable".
  *
- * Espejo manual de los DTOs en `src/api/schemas/`. En una iteración futura
- * estos tipos se autogenerarán desde `/openapi.json` con openapi-typescript,
- * pero por ahora la versión manual es suficiente y deja el contrato claro.
+ * Estos tipos son los que el frontend usa día a día. Son aliases /
+ * re-empaquetados de los tipos autoritarios en `openapi.gen.ts`.
  *
- * Si modificas un schema en Python, replícalo aquí — los tests de smoke
- * validan que el contrato sigue siendo válido del lado server.
+ * **Fuente de verdad:** `openapi.gen.ts` (auto-generada desde la spec
+ * OpenAPI del backend). Regenerar con:
+ *
+ *     npm run gen:api-types     # requiere el backend corriendo en :8001
+ *
+ * Workflow cuando un schema Python cambia:
+ *   1. `npm run gen:api-types` → actualiza `openapi.gen.ts`
+ *   2. Diffea `openapi.gen.ts` para ver qué cambió
+ *   3. Sincroniza los campos relevantes en este archivo
+ *   4. `npm run typecheck` valida que nada se rompió
  */
 
 export type TipoDocumento = "model_development" | "prophet";

@@ -13,7 +13,6 @@ import {
   Home,
   FileText,
   Upload,
-  ClipboardList,
   Sparkles,
   Settings,
   HelpCircle,
@@ -30,10 +29,12 @@ interface NavItem {
 }
 
 const NAV_PRIMARY: NavItem[] = [
+  // "Inicio" lista todos los documentos — no duplicamos con "/documentos"
+  // "Auditoría" es contextual a un documento (vive en /documentos/[id]/auditoria),
+  // no tiene sentido como item global del sidebar
   { label: "Inicio", href: "/", icon: Home },
-  { label: "Documentos", href: "/documentos", icon: FileText },
   { label: "Importar", href: "/importar", icon: Upload },
-  { label: "Auditoría", href: "/auditoria", icon: ClipboardList },
+  { label: "Crear nuevo", href: "/documentos/crear", icon: FileText },
   { label: "Ficha Prophet", href: "/prophet", icon: Sparkles, badge: "Beta" },
 ];
 

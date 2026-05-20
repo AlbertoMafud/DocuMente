@@ -364,6 +364,168 @@ Los 3 servicios coexisten sin conflicto — comparten la misma BD SQLite.
 
 ---
 
+## 14. Áreas exactas que TÚ tocas (Cognito + PostgreSQL + Bedrock)
+
+> Tres swaps que tú vas a ejecutar en EC2. Aquí los paths específicos para que no tengas que buscarlos.
+
+### 14.1 Cognito real — reemplaza el bearer token compartido
+
+**Estado actual:** `src/api/auth.py` tiene un bearer token simple que reutiliza `DOCUMENTE_GATE_PASSWORD`. Es un placeholder.
+
+**Qué tocar:**
+
+| Archivo | Qué hacer |
+|---|---|
+| **`src/api/auth.py`** | **Único archivo que reescribes.** Sustituye la función `require_auth()` por verificación de JWT (ALB-header) o validación contra Cognito User Pool. El resto de la API consume `CurrentUser = Annotated[str, Depends(require_auth)]` y no se entera del cambio |
+| `src/api/main.py` (opcional) | Si usas ALB-header injection, agregar middleware que extraiga `X-Amzn-Oidc-Data` antes del router |
+| `frontend/src/lib/api/client.ts` | Si pasas a Hosted UI, ajustar de bearer estático (`API_TOKEN`) a token dinámico desde sesión Cognito |
+| `frontend/.env.production` | Quitar `NEXT_PUBLIC_API_TOKEN` (ya no se necesita en build-time si el token viene del flow OAuth) |
+
+**Las 3 opciones técnicas en concreto:**
+
+```python
+# Opción A — ALB-header (recomendado si todo está dentro de AWS)
+def require_auth(request: Request) -> str:
+    oidc_data = request.headers.get("X-Amzn-Oidc-Data")
+    if not oidc_data:
+        raise HTTPException(401, "ALB JWT missing")
+    payload = jwt.decode(oidc_data, public_key, algorithms=["ES256"])
+    return payload["cognito:username"]
+```
+
+```python
+# Opción B — JWT middleware (funciona dentro y fuera de AWS)
+def require_auth(creds: Annotated[HTTPAuthorizationCredentials, Depends(security)]) -> str:
+    token = creds.credentials
+    payload = jwt.decode(
+        token,
+        jwks_client.get_signing_key_from_jwt(token).key,
+        algorithms=["RS256"],
+        audience=os.environ["COGNITO_CLIENT_ID"],
+    )
+    return payload["cognito:username"]
+```
+
+```python
+# Opción C — Hosted UI con cookies de sesión (más Next.js-friendly)
+# El frontend hace login en Hosted UI → callback → setea httponly cookie
+# El backend valida la cookie en cada request
+```
+
+**Tests a actualizar:** `tests/integration/test_api_smoke.py` líneas 220-250 (los 3 tests de auth gate). Reemplazar el bearer token mock por un JWT mock válido contra tu Cognito User Pool de test.
+
+**Lo que NO tienes que cambiar:** ningún router, ningún use case, ningún DTO. La auth está aislada en `src/api/auth.py` y `CurrentUser` es la única superficie pública.
+
+---
+
+### 14.2 SQLite → PostgreSQL — migración de persistencia
+
+**Estado actual:** la app lee `DATABASE_URL` de env. En local apunta a `sqlite:///data/documente.db`. SQLAlchemy abstrae el dialecto.
+
+**Qué tocar:**
+
+| Archivo | Qué hacer |
+|---|---|
+| **`.env` (en EC2)** | **Único cambio en código.** `DATABASE_URL=postgresql://documente:<pass>@<rds-endpoint>:5432/documente` |
+| `pyproject.toml` | Agregar `psycopg2-binary>=2.9` o `psycopg[binary]>=3.1` como dep (driver PostgreSQL) |
+| `src/storage/db.py` | **No tocar** — SQLAlchemy elige el dialecto desde la URI automáticamente |
+| `src/storage/repositories.py` | **No tocar** — usa SQLAlchemy ORM puro, agnóstico al dialecto |
+
+**Script de inicialización en EC2 (crear tablas la primera vez):**
+
+```python
+# scripts/init_schema_postgres.py (crear este archivo)
+from src.storage.db import engine, Base
+Base.metadata.create_all(engine)
+print(f"Schema creado en {engine.url}")
+```
+
+Correr una vez post-deploy: `python -m scripts.init_schema_postgres`
+
+**Migración de datos (si hay datos seed en SQLite que mover):**
+
+```bash
+# Exportar de SQLite local
+sqlite3 data/documente.db .dump > dump.sql
+
+# Limpieza SQLite-specific antes de importar a PG
+sed -i 's/AUTOINCREMENT/SERIAL/g; s/PRAGMA.*$//' dump.sql
+
+# Importar a PostgreSQL
+psql $DATABASE_URL < dump.sql
+```
+
+Para el MVP probablemente no hay datos seed que migrar — RDS arranca vacía y los usuarios crean docs nuevos.
+
+**Tests a actualizar:** `tests/integration/conftest.py` (si existe) — usar `testcontainers` para levantar Postgres efímero en CI, o seguir usando SQLite en CI (los repos son agnósticos).
+
+---
+
+### 14.3 Anthropic directo → Bedrock — swap del LLM provider
+
+**Estado actual:** `src/llm/client.py` define `LLMClient` como Protocol; `AnthropicClient` lo implementa con el SDK de Anthropic directo.
+
+**Qué tocar:**
+
+| Archivo | Qué hacer |
+|---|---|
+| **`src/llm/client.py`** | Agregar nueva clase `BedrockClient` que cumpla el mismo Protocol `LLMClient`. Mantener `AnthropicClient` por compatibilidad (toggle por env var) |
+| `pyproject.toml` | Agregar `boto3>=1.34` como dep (no instalar `anthropic-sdk` adicional, Bedrock se usa vía boto3) |
+| **`src/api/deps.py`** | Cambiar el provider `get_llm_client()` para que devuelva `BedrockClient()` o `AnthropicClient()` según `LLM_PROVIDER` env var |
+| `.env` | Nueva var `LLM_PROVIDER=bedrock` (default `anthropic`); `AWS_REGION=us-east-1` |
+| `src/llm/prompts/` | **No tocar** — los prompts son agnósticos del provider |
+| `src/core/usecases/` | **No tocar** — los use cases reciben un `LLMClient` por inyección |
+
+**Implementación del `BedrockClient`:**
+
+```python
+# src/llm/client.py (agregar al final)
+class BedrockClient:
+    """Cumple LLMClient pero usa AWS Bedrock en lugar de Anthropic SDK directo."""
+
+    def __init__(self, region: str = "us-east-1") -> None:
+        import boto3
+        self._client = boto3.client("bedrock-runtime", region_name=region)
+
+    def chat(self, messages: list[dict], tarea: Tarea, **kwargs) -> LLMResponse:
+        modelo = self.modelo_para(tarea)  # mismo mapping tiered: Sonnet/Opus/Haiku
+        body = {
+            "anthropic_version": "bedrock-2023-05-31",
+            "messages": messages,
+            "max_tokens": kwargs.get("max_tokens", 4096),
+            # ... resto de params equivalentes
+        }
+        resp = self._client.invoke_model(
+            modelId=f"anthropic.{modelo}-v1:0",
+            body=json.dumps(body),
+        )
+        return self._parse_bedrock_response(resp)
+
+    def modelo_para(self, tarea: Tarea) -> str:
+        # Mismo mapping que AnthropicClient pero con IDs Bedrock
+        return BEDROCK_MODEL_IDS[tarea]
+```
+
+**Lo crítico:** mismo Protocol, misma firma de `chat()`, mismo formato de `LLMResponse`. Los use cases (`InterviewEngine`, `Drafter`, `KnowledgeExtractor`, `TraductorDocumento`, `DocumentPolisher`) **no se enteran del cambio**.
+
+**Costo del swap:** ~1 día de Vidal incluyendo configurar IAM role + invocación de modelos en Bedrock + ajustar pricing (Bedrock tiene tarifas distintas a Anthropic directo — actualizar `src/llm/pricing.py`).
+
+**Tests a actualizar:** `tests/unit/test_anthropic_client.py` (si existe) — agregar `tests/unit/test_bedrock_client.py` con mocks de boto3.
+
+---
+
+### 14.4 Resumen de superficie tocada por Vidal
+
+| Migración | Archivos modificados | Archivos NUEVOS | Costo |
+|---|---|---|---|
+| Cognito real | `src/api/auth.py`, `frontend/src/lib/api/client.ts`, `.env.production` | — | 2-3 días |
+| SQLite → PostgreSQL | `.env`, `pyproject.toml` | `scripts/init_schema_postgres.py` | 1 día |
+| Anthropic → Bedrock | `src/llm/client.py`, `src/api/deps.py`, `.env`, `pyproject.toml` | (interno: `BedrockClient` en mismo archivo) | 1-2 días |
+
+**Total estimado:** 5-6 días para las 3 migraciones cerradas.
+
+---
+
 Cualquier duda escríbeme. Documentos relacionados:
 - `docs/ARQUITECTURA.md` — referencia técnica atemporal
 - `docs/MIGRATION_TO_EC2.md` — plan de migración detallado
