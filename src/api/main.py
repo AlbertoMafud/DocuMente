@@ -13,6 +13,8 @@ OpenAPI JSON: http://localhost:8000/openapi.json
 
 from __future__ import annotations
 
+import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -49,15 +51,21 @@ app = FastAPI(
     },
 )
 
-# CORS abierto para desarrollo local — el frontend Next.js correrá en
-# localhost:3000 contra esta API en localhost:8000. En prod se restringe
-# al dominio del frontend (variable de entorno o hardcoded por env).
+# CORS configurable por env var CORS_ORIGINS. Default "*" para dev local
+# (Next.js en localhost:3000 contra API en localhost:8001). En EC2 prod
+# se restringe via .env: ej. CORS_ORIGINS=https://documente.smnyl.local
+# Múltiples orígenes separados por coma. Ver docs/HANDOFF_VIDAL.md §5.
+_cors_raw = os.environ.get("CORS_ORIGINS", "*")
+_allow_origins = (
+    ["*"] if _cors_raw == "*" else [o.strip() for o in _cors_raw.split(",") if o.strip()]
+)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_allow_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 install_exception_handlers(app)
