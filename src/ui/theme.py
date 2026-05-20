@@ -140,7 +140,7 @@ def _build_css() -> str:
         border-radius: var(--radius-md);
         padding: 0.6rem 1.25rem;
         border: 1px solid transparent;
-        transition: all 150ms ease;
+        transition: all 200ms ease-out;
         box-shadow: var(--shadow-sm);
     }}
 
@@ -177,6 +177,7 @@ def _build_css() -> str:
         border: 1px solid var(--color-border);
         font-family: var(--font-body);
         color: var(--color-text);
+        transition: border-color 200ms ease-out, box-shadow 200ms ease-out;
     }}
 
     .stTextInput > div > div > input:focus,
@@ -193,6 +194,39 @@ def _build_css() -> str:
         box-shadow: var(--shadow-sm);
         padding: var(--space-md);
         background-color: var(--color-bg);
+        transition: box-shadow 200ms ease-out, border-color 200ms ease-out;
+    }}
+
+    [data-testid="stVerticalBlockBorderWrapper"]:hover {{
+        box-shadow: var(--shadow-md);
+        border-color: var(--color-accent-soft);
+    }}
+
+    /* Expander (acordeón del dashboard por capítulos NYL) */
+    [data-testid="stExpander"] {{
+        border-radius: var(--radius-md);
+        border: 1px solid var(--color-border);
+        transition: border-color 200ms ease-out, box-shadow 200ms ease-out;
+    }}
+
+    [data-testid="stExpander"]:hover {{
+        border-color: var(--color-accent-soft);
+        box-shadow: var(--shadow-sm);
+    }}
+
+    [data-testid="stExpander"] summary,
+    [data-testid="stExpander"] details > summary {{
+        transition: background-color 200ms ease-out, color 200ms ease-out;
+    }}
+
+    [data-testid="stExpander"] summary:hover,
+    [data-testid="stExpander"] details > summary:hover {{
+        background-color: var(--color-bg-soft);
+    }}
+
+    /* Tabs (Activos / Archivados / Papelera) */
+    [data-baseweb="tab"] {{
+        transition: color 200ms ease-out, border-bottom-color 200ms ease-out;
     }}
 
     /* Métricas */
