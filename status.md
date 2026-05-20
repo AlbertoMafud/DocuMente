@@ -2,7 +2,7 @@
 
 > Estado vivo del proyecto. Se lee al iniciar sesión y se actualiza al cerrar si hubo cambios significativos.
 
-**Última actualización:** 2026-05-20 (sesión 15 — cierre opción A: CORS configurable por env var, fix Unicode em-dash en export DOCX, Playwright E2E happy-path. **3 commits adicionales sobre S14, fast-forward + push a `claude/affectionate-noether-8e038f`**. Tests: 528 pass.)
+**Última actualización:** 2026-05-20 (sesión 15 — cierre opción A + extensión: CORS env var, fix Unicode em-dash export, Playwright suite escalada 1→7 tests con README en español. **5 commits adicionales sobre S14, push a `claude/affectionate-noether-8e038f`**. Tests: 528 Python + 7 E2E.)
 
 ---
 
@@ -26,7 +26,7 @@ Ambos frontends consumen los mismos use cases en `src/core/usecases/`. El domini
 - **PR a main** abierto pendiente — link: `https://github.com/AlbertoMafud/DocuMente/compare/main...claude/affectionate-noether-8e038f` (cuando Alberto haga click en "Create pull request").
 - `feat/remediacion-s13-s16` aún existe en GitHub con el snapshot S13 puro (obsoleto, sin S14/S15).
 
-**Tests: 528 pasando** (429 unit + 28 integration smoke de API + 70 integration + 1 E2E Playwright). Ruff check + format clean. ESLint frontend clean. TypeScript `--noEmit` clean. 0 regresiones.
+**Tests: 528 Python + 7 E2E Playwright** (429 unit + 99 integration + 7 E2E). Ruff check + format clean. ESLint frontend clean. TypeScript `--noEmit` clean. 0 regresiones.
 
 **Próximo inmediato (sesión 16) — orden ejecutable:**
 
@@ -1083,6 +1083,27 @@ Sesión corta y enfocada: ejecutar los 3 entregables de "opción A" aprobados al
 - **Backend stale en background**: si arrancas uvicorn manualmente para debug (curl) y se queda corriendo, Playwright lo reusa por `reuseExistingServer: true` y enmascara fixes recientes. Matarlo antes de re-correr el test.
 - **`git worktree remove` en Windows** falla con "Permission denied" si el shell está parado dentro del worktree. Necesitas cerrar la sesión o cambiar de cwd primero.
 - **Em-dash en nombres de modelo**: AHORA SÍ funciona en export. Antes era un bug latente que nadie había notado porque los tests usaban ASCII.
+
+### Extensión de S15 — Playwright escalado a 7 tests (commit `da0fb8b`)
+
+Alberto pidió escalar la suite. Se hicieron 6 tests E2E nuevos + README:
+
+| Test | Archivo | Cobertura |
+|---|---|---|
+| Importar (ciclo crear→exportar→importar) | `importar.spec.ts` | DOCX writer + reader simétricos |
+| Editar + persistir sección | `editar-seccion.spec.ts` | El flujo más fundamental; persistencia BD |
+| Guarda MRM (draft→in_review rechazado) | `gobernanza.spec.ts` | State machine bloquea con razón útil |
+| Subir CSV como apéndice | `apendices.spec.ts` | Upload multipart en /apendices |
+| Entrevista sin API key → 503 amigable | `llm-fallback.spec.ts` | Degradación elegante sin LLM |
+| Crear versión + verificar lista | `versiones.spec.ts` | Snapshots inmutables |
+
+Plus `helpers.ts` con `crearDocumentoMRM()` y `logHttpErrors()` compartidos, y `e2e/README.md` con doc completa en español.
+
+**Suite 7/7 en ~40s.** TypeScript clean, ESLint clean.
+
+**Bugs latentes descubiertos por la suite:**
+- Em-dash en nombres de modelo (arreglado en `8f4835a`).
+- Guarda MRM correcta: la transición draft→in_review SE rechaza con 409 cuando hay secciones obligatorias vacías. El test ahora documenta esta regla y verifica que el toast muestra la razón.
 
 ---
 
