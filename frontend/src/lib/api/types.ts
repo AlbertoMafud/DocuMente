@@ -184,3 +184,41 @@ export interface TemplateInfo {
   nombre: string;
   n_secciones: number;
 }
+
+export interface MensajeEntrevista {
+  rol: "user" | "assistant" | "system_note";
+  contenido: string;
+}
+
+export interface TurnoEntrevista {
+  respuesta_asistente: string;
+  seccion_cerrada: boolean;
+  borrador: string | null;
+  n_mensajes: number;
+}
+
+export interface IniciarEntrevistaResponse {
+  turno: TurnoEntrevista;
+  seccion_id: string;
+  mensajes: MensajeEntrevista[];
+}
+
+export interface Version {
+  id: string;
+  documento_id: string;
+  numero: number;
+  comentario: string;
+  creado_en: string;
+  hash_contenido: string;
+}
+
+export interface Apendice {
+  id: string;
+  seccion_origen_id: string;
+  titulo: string;
+  tipo: "tabla" | "pdf" | "formula" | string;
+  nombre_archivo_original: string;
+  contenido_md: string;
+}
+
+export type RolSignoff = "reviewer" | "fae";

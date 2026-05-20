@@ -9,15 +9,21 @@
  */
 import type {
   AccionVisibilidadRequest,
+  Apendice,
   Brecha,
   CapituloMRM,
   CrearDocumentoRequest,
   Documento,
   DocumentoListItem,
   EditarMetadataRequest,
+  EstadoDocumento,
   EventoAuditoria,
+  IniciarEntrevistaResponse,
+  RolSignoff,
   Seccion,
   TemplateInfo,
+  TurnoEntrevista,
+  Version,
   Visibilidad,
 } from "./types";
 
@@ -124,6 +130,18 @@ export const documentosApi = {
 
   restaurar: (id: string) =>
     request<DocumentoListItem>(`/documentos/${id}/restaurar`, { method: "POST" }),
+
+  cambiarEstado: (id: string, destino: EstadoDocumento, actor = "default") =>
+    request<Documento>(`/documentos/${id}/estado`, {
+      method: "POST",
+      body: JSON.stringify({ destino, actor }),
+    }),
+
+  signoff: (id: string, rol: RolSignoff, actor = "default") =>
+    request<Documento>(`/documentos/${id}/signoff`, {
+      method: "POST",
+      body: JSON.stringify({ rol, actor }),
+    }),
 };
 
 // ===== Secciones =====
@@ -169,6 +187,117 @@ export const exportarApi = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     }),
+};
+
+// ===== Entrevista LLM =====
+
+export const entrevistaApi = {
+  iniciar: (docId: string, sid: string) =>
+    request<IniciarEntrevistaResponse>(
+      `/documentos/${docId}/entrevista/${encodeURIComponent(sid)}/iniciar`,
+      { method: "POST" },
+    ),
+
+  responder: (docId: string, sid: string, respuesta: string, actor = "default") =>
+    request<TurnoEntrevista>(
+      `/documentos/${docId}/entrevista/${encodeURIComponent(sid)}/responder`,
+      {
+        method: "POST",
+        body: JSON.stringify({ respuesta, actor }),
+      },
+    ),
+
+  estado: (docId: string, sid: string) =>
+    request<IniciarEntrevistaResponse>(
+      `/documentos/${docId}/entrevista/${encodeURIComponent(sid)}/estado`,
+    ),
+
+  descartar: (docId: string, sid: string) =>
+    request<{ ok: boolean; mensaje: string }>(
+      `/documentos/${docId}/entrevista/${encodeURIComponent(sid)}`,
+      { method: "DELETE" },
+    ),
+};
+
+// ===== Versiones =====
+
+export const versionesApi = {
+  listar: (docId: string) =>
+    request<Version[]>(`/documentos/${docId}/versiones`),
+
+  crear: (docId: string, comentario = "", actor = "default") =>
+    request<Version>(`/documentos/${docId}/versiones`, {
+      method: "POST",
+      body: JSON.stringify({ comentario, actor }),
+    }),
+
+  obtener: (versionId: string) => request<Version>(`/versiones/${versionId}`),
+};
+
+// ===== Apéndices =====
+
+export const apendicesApi = {
+  listar: (docId: string) =>
+    request<Apendice[]>(`/documentos/${docId}/apendices`),
+
+  async adjuntarTabla(
+    docId: string,
+    sid: string,
+    archivo: File,
+    titulo_base: string,
+  ): Promise<Apendice[]> {
+    const fd = new FormData();
+    fd.append("archivo", archivo);
+    fd.append("titulo_base", titulo_base);
+    const headers: Record<string, string> = {};
+    if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
+    const res = await fetch(
+      `${API_URL}/documentos/${docId}/secciones/${encodeURIComponent(sid)}/apendices/tabla`,
+      { method: "POST", body: fd, headers },
+    );
+    if (!res.ok) {
+      const detail = await res.text().catch(() => res.statusText);
+      throw new APIError(res.status, detail);
+    }
+    return await res.json();
+  },
+
+  async adjuntarPdf(
+    docId: string,
+    sid: string,
+    archivo: File,
+    titulo: string,
+  ): Promise<Apendice> {
+    const fd = new FormData();
+    fd.append("archivo", archivo);
+    fd.append("titulo", titulo);
+    const headers: Record<string, string> = {};
+    if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
+    const res = await fetch(
+      `${API_URL}/documentos/${docId}/secciones/${encodeURIComponent(sid)}/apendices/pdf`,
+      { method: "POST", body: fd, headers },
+    );
+    if (!res.ok) {
+      const detail = await res.text().catch(() => res.statusText);
+      throw new APIError(res.status, detail);
+    }
+    return await res.json();
+  },
+
+  adjuntarFormula: (docId: string, sid: string, latex_source: string, titulo: string) =>
+    request<Apendice>(
+      `/documentos/${docId}/secciones/${encodeURIComponent(sid)}/apendices/formula`,
+      {
+        method: "POST",
+        body: JSON.stringify({ latex_source, titulo }),
+      },
+    ),
+
+  borrar: (docId: string, apendiceId: string) =>
+    request<{ ok: boolean; mensaje: string }>(
+      `/documentos/${docId}/apendices/${apendiceId}`,
+      { method: "DELETE" },
+    ),
 };
 
 // ===== Importar (multipart) =====

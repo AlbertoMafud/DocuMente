@@ -10,7 +10,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { CheckCircle2, CircleDashed, Circle, FileEdit } from "lucide-react";
+import { CheckCircle2, CircleDashed, Circle, FileEdit, Sparkles } from "lucide-react";
 
 import type { Brecha, Documento, Seccion } from "@/lib/api/types";
 import {
@@ -204,6 +204,16 @@ function SeccionRow({ seccion, documentoId, nBrechas }: SeccionRowProps) {
         <Badge variant="critica" className="shrink-0">
           {nBrechas} brecha{nBrechas === 1 ? "" : "s"}
         </Badge>
+      )}
+      {(seccion.completitud === "vacia" || seccion.completitud === "parcial") && (
+        <Button variant="outline" size="sm" asChild className="shrink-0">
+          <Link
+            href={`/documentos/${documentoId}/entrevista/${encodeURIComponent(seccion.id)}`}
+          >
+            <Sparkles className="mr-1 h-3.5 w-3.5" />
+            Entrevistar
+          </Link>
+        </Button>
       )}
       <Button variant="ghost" size="sm" asChild className="shrink-0">
         <Link href={`/documentos/${documentoId}/secciones/${encodeURIComponent(seccion.id)}`}>

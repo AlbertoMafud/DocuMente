@@ -13,16 +13,21 @@ import {
 } from "@tanstack/react-query";
 
 import {
+  apendicesApi,
   auditoriaApi,
   brechasApi,
   documentosApi,
+  entrevistaApi,
   seccionesApi,
   templatesApi,
+  versionesApi,
 } from "./client";
 import type {
   AccionVisibilidadRequest,
   CrearDocumentoRequest,
   EditarMetadataRequest,
+  EstadoDocumento,
+  RolSignoff,
   Visibilidad,
 } from "./types";
 
@@ -35,6 +40,10 @@ export const qk = {
   secciones: (docId: string) => ["documentos", docId, "secciones"] as const,
   seccion: (docId: string, sid: string) =>
     ["documentos", docId, "secciones", sid] as const,
+  entrevistaEstado: (docId: string, sid: string) =>
+    ["documentos", docId, "entrevista", sid] as const,
+  versiones: (docId: string) => ["documentos", docId, "versiones"] as const,
+  apendices: (docId: string) => ["documentos", docId, "apendices"] as const,
   capitulosMRM: () => ["templates", "mrm", "capitulos"] as const,
   templates: () => ["templates"] as const,
 };
@@ -170,6 +179,195 @@ export function useEditarSeccion() {
       qc.invalidateQueries({ queryKey: qk.brechas(vars.docId) });
       qc.invalidateQueries({ queryKey: qk.secciones(vars.docId) });
       qc.invalidateQueries({ queryKey: qk.seccion(vars.docId, vars.sid) });
+    },
+  });
+}
+
+// ===== State machine + signoffs =====
+
+export function useCambiarEstado() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, destino }: { id: string; destino: EstadoDocumento }) =>
+      documentosApi.cambiarEstado(id, destino),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["documentos"] });
+      qc.setQueryData(qk.documento(data.id), data);
+      qc.invalidateQueries({ queryKey: qk.auditoria(data.id) });
+    },
+  });
+}
+
+export function useRegistrarSignoff() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, rol }: { id: string; rol: RolSignoff }) =>
+      documentosApi.signoff(id, rol),
+    onSuccess: (data) => {
+      qc.setQueryData(qk.documento(data.id), data);
+      qc.invalidateQueries({ queryKey: qk.auditoria(data.id) });
+    },
+  });
+}
+
+// ===== Entrevista =====
+
+export function useEstadoEntrevista(docId: string, sid: string) {
+  return useQuery({
+    queryKey: qk.entrevistaEstado(docId, sid),
+    queryFn: () => entrevistaApi.estado(docId, sid),
+    enabled: !!docId && !!sid,
+    retry: false,  // 404 si no hay entrevista activa — no reintentar
+  });
+}
+
+export function useIniciarEntrevista() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ docId, sid }: { docId: string; sid: string }) =>
+      entrevistaApi.iniciar(docId, sid),
+    onSuccess: (data, vars) => {
+      qc.setQueryData(qk.entrevistaEstado(vars.docId, vars.sid), data);
+    },
+  });
+}
+
+export function useResponderPregunta() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      docId,
+      sid,
+      respuesta,
+    }: {
+      docId: string;
+      sid: string;
+      respuesta: string;
+    }) => entrevistaApi.responder(docId, sid, respuesta),
+    onSuccess: (_data, vars) => {
+      // Re-fetch del estado para tener el historial completo
+      qc.invalidateQueries({ queryKey: qk.entrevistaEstado(vars.docId, vars.sid) });
+      qc.invalidateQueries({ queryKey: qk.documento(vars.docId) });
+      qc.invalidateQueries({ queryKey: qk.brechas(vars.docId) });
+      qc.invalidateQueries({ queryKey: qk.secciones(vars.docId) });
+    },
+  });
+}
+
+export function useDescartarEntrevista() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ docId, sid }: { docId: string; sid: string }) =>
+      entrevistaApi.descartar(docId, sid),
+    onSuccess: (_data, vars) => {
+      qc.removeQueries({ queryKey: qk.entrevistaEstado(vars.docId, vars.sid) });
+    },
+  });
+}
+
+// ===== Versiones =====
+
+export function useVersiones(docId: string) {
+  return useQuery({
+    queryKey: qk.versiones(docId),
+    queryFn: () => versionesApi.listar(docId),
+    enabled: !!docId,
+  });
+}
+
+export function useCrearVersion() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ docId, comentario }: { docId: string; comentario: string }) =>
+      versionesApi.crear(docId, comentario),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: qk.versiones(vars.docId) });
+      qc.invalidateQueries({ queryKey: qk.documento(vars.docId) });
+    },
+  });
+}
+
+// ===== Apéndices =====
+
+export function useApendices(docId: string) {
+  return useQuery({
+    queryKey: qk.apendices(docId),
+    queryFn: () => apendicesApi.listar(docId),
+    enabled: !!docId,
+  });
+}
+
+export function useAdjuntarTabla() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      docId,
+      sid,
+      archivo,
+      titulo_base,
+    }: {
+      docId: string;
+      sid: string;
+      archivo: File;
+      titulo_base: string;
+    }) => apendicesApi.adjuntarTabla(docId, sid, archivo, titulo_base),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: qk.apendices(vars.docId) });
+      qc.invalidateQueries({ queryKey: qk.documento(vars.docId) });
+    },
+  });
+}
+
+export function useAdjuntarPdf() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      docId,
+      sid,
+      archivo,
+      titulo,
+    }: {
+      docId: string;
+      sid: string;
+      archivo: File;
+      titulo: string;
+    }) => apendicesApi.adjuntarPdf(docId, sid, archivo, titulo),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: qk.apendices(vars.docId) });
+      qc.invalidateQueries({ queryKey: qk.documento(vars.docId) });
+    },
+  });
+}
+
+export function useAdjuntarFormula() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      docId,
+      sid,
+      latex_source,
+      titulo,
+    }: {
+      docId: string;
+      sid: string;
+      latex_source: string;
+      titulo: string;
+    }) => apendicesApi.adjuntarFormula(docId, sid, latex_source, titulo),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: qk.apendices(vars.docId) });
+      qc.invalidateQueries({ queryKey: qk.documento(vars.docId) });
+    },
+  });
+}
+
+export function useBorrarApendice() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ docId, apendiceId }: { docId: string; apendiceId: string }) =>
+      apendicesApi.borrar(docId, apendiceId),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: qk.apendices(vars.docId) });
+      qc.invalidateQueries({ queryKey: qk.documento(vars.docId) });
     },
   });
 }

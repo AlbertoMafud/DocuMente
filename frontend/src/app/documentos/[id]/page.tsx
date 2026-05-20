@@ -15,6 +15,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useBrechas, useDocumento } from "@/lib/api/hooks";
 import { DashboardHero } from "@/components/dashboard/dashboard-hero";
 import { MetricsRow } from "@/components/dashboard/metrics-row";
+import { GovernanceCard } from "@/components/dashboard/governance-card";
+import { QuickLinks } from "@/components/dashboard/quick-links";
 import { BrechasAccordion } from "@/components/dashboard/brechas-accordion";
 import { SeccionesAccordion } from "@/components/dashboard/secciones-accordion";
 
@@ -60,7 +62,12 @@ export default function DashboardPage() {
   return (
     <div className="space-y-8">
       <DashboardHero documento={docQuery.data} />
+      <QuickLinks
+        documentoId={docQuery.data.id}
+        nEventos={docQuery.data.n_eventos_audit}
+      />
       <MetricsRow documento={docQuery.data} brechas={brechas} />
+      <GovernanceCard documento={docQuery.data} />
       <BrechasAccordion brechas={brechas} />
       <SeccionesAccordion documento={docQuery.data} brechas={brechas} />
     </div>
