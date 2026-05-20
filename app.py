@@ -13,7 +13,7 @@ import streamlit as st
 
 from src.core.usecases import ArchivarDocumento, purgar_papelera_expirada
 from src.storage.repositories import DocumentoRepository
-from src.ui.components import auth_gate, header
+from src.ui.components import auth_gate, continue_hero, header
 from src.ui.pages import (
     auditoria,
     brief_inicial,
@@ -33,60 +33,117 @@ ASSETS_DIR = Path(__file__).parent / "assets"
 LOGO_PATH = ASSETS_DIR / "logo-smnyl.jpg"
 
 
+def _doc_en_progreso_mas_reciente(repo: DocumentoRepository, user_id: str):
+    """Devuelve el doc activo más reciente en draft/in_review, o None."""
+    activos = repo.listar_por_usuario(user_id)
+    en_progreso = [d for d in activos if d.estado in ("draft", "in_review")]
+    if not en_progreso:
+        return None
+    return max(en_progreso, key=lambda d: d.actualizado_en)
+
+
 def _render_home() -> None:
-    """Pantalla de inicio: hero + CTAs + lista de documentos recientes."""
+    """Pantalla de inicio: hero "Continúa…" o 3 CTAs + lista de documentos."""
     header.render(breadcrumbs=None)
 
-    st.markdown(
-        f"""
-        <h1 style="
-            font-family: var(--font-display);
-            font-size: 3rem;
-            font-weight: 600;
-            color: {SMNYL_COLORS["text"]};
-            margin-bottom: 0.5rem;
-            line-height: 1.1;
-        ">Documenta modelos sin fricción</h1>
-        <p style="
-            font-size: 1.25rem;
-            color: {SMNYL_COLORS["text_muted"]};
-            margin-bottom: 3rem;
-            max-width: 720px;
-        ">DocuMente entrevista, estructura y genera documentación institucional
-        alineada con el marco MRM de SMNYL — desde cero o partiendo de un
-        documento existente.</p>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    col_a, col_b, col_c, _ = st.columns([1, 1, 1, 1])
-    with col_a:
-        if st.button(
-            "Crear nuevo documento",
-            type="primary",
-            use_container_width=True,
-            help="Empieza con las 28 secciones vacías del template oficial NYL.",
-        ):
-            st.session_state["pagina"] = "crear_nuevo"
-            st.rerun()
-    with col_b:
-        if st.button("Mejorar documento existente", use_container_width=True):
-            st.session_state["pagina"] = "importar"
-            st.rerun()
-    with col_c:
-        if st.button(
-            "Iniciar Ficha Prophet",
-            use_container_width=True,
-            help="Importa el registro Excel de Modelos Actuariales y genera la ficha técnica.",
-        ):
-            st.session_state["pagina"] = "crear_prophet"
-            st.rerun()
-
-    st.markdown("<div style='height: 3rem;'></div>", unsafe_allow_html=True)
-
-    # Documentos: tabs Activos / Archivados / Papelera
     repo = DocumentoRepository()
     user_id = "default"  # TODO Fase A.1.c: leer de header Cognito
+    doc_en_progreso = _doc_en_progreso_mas_reciente(repo, user_id)
+
+    # Modo hero (hay actividad reciente): título compacto + hero + CTAs secundarios.
+    # Modo bienvenida (sin actividad): título grande + 3 CTAs prominentes.
+    if doc_en_progreso is not None:
+        st.markdown(
+            f"""
+            <h1 style="
+                font-family: var(--font-display);
+                font-size: 2rem;
+                font-weight: 600;
+                color: {SMNYL_COLORS["text"]};
+                margin-bottom: 1.5rem;
+                line-height: 1.2;
+            ">DocuMente</h1>
+            """,
+            unsafe_allow_html=True,
+        )
+        clicked = continue_hero.render(doc_en_progreso)
+        if clicked:
+            st.session_state["documento_actual_id"] = str(doc_en_progreso.id)
+            st.session_state["pagina"] = "dashboard"
+            st.rerun()
+        # CTAs secundarios pequeños como text-link row
+        col_a, col_b, col_c, _ = st.columns([1.1, 1.1, 1.1, 1])
+        with col_a:
+            if st.button(
+                "Crear nuevo",
+                use_container_width=True,
+                key="cta_secundario_crear",
+            ):
+                st.session_state["pagina"] = "crear_nuevo"
+                st.rerun()
+        with col_b:
+            if st.button(
+                "Importar otro .docx",
+                use_container_width=True,
+                key="cta_secundario_importar",
+            ):
+                st.session_state["pagina"] = "importar"
+                st.rerun()
+        with col_c:
+            if st.button(
+                "Ficha Prophet",
+                use_container_width=True,
+                key="cta_secundario_prophet",
+            ):
+                st.session_state["pagina"] = "crear_prophet"
+                st.rerun()
+    else:
+        st.markdown(
+            f"""
+            <h1 style="
+                font-family: var(--font-display);
+                font-size: 3rem;
+                font-weight: 600;
+                color: {SMNYL_COLORS["text"]};
+                margin-bottom: 0.5rem;
+                line-height: 1.1;
+            ">Documenta modelos sin fricción</h1>
+            <p style="
+                font-size: 1.25rem;
+                color: {SMNYL_COLORS["text_muted"]};
+                margin-bottom: 3rem;
+                max-width: 720px;
+            ">DocuMente entrevista, estructura y genera documentación institucional
+            alineada con el marco MRM de SMNYL — desde cero o partiendo de un
+            documento existente.</p>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        col_a, col_b, col_c, _ = st.columns([1, 1, 1, 1])
+        with col_a:
+            if st.button(
+                "Crear nuevo documento",
+                type="primary",
+                use_container_width=True,
+                help="Empieza con las 28 secciones vacías del template oficial NYL.",
+            ):
+                st.session_state["pagina"] = "crear_nuevo"
+                st.rerun()
+        with col_b:
+            if st.button("Mejorar documento existente", use_container_width=True):
+                st.session_state["pagina"] = "importar"
+                st.rerun()
+        with col_c:
+            if st.button(
+                "Iniciar Ficha Prophet",
+                use_container_width=True,
+                help="Importa el registro Excel de Modelos Actuariales y genera la ficha técnica.",
+            ):
+                st.session_state["pagina"] = "crear_prophet"
+                st.rerun()
+
+    st.markdown("<div style='height: 3rem;'></div>", unsafe_allow_html=True)
 
     tab_activos, tab_archivados, tab_papelera = st.tabs(["Activos", "Archivados", "Papelera"])
     with tab_activos:
