@@ -175,6 +175,14 @@ def _dialog_exportar_docx(documento_id_str: str) -> None:
                     "Continuando con el export sin sugerencias."
                 )
         try:
+            # Detectar si este es el primer export del documento (para celebración)
+            es_primer_export = False
+            repo_check = DocumentoRepository()
+            doc_check = repo_check.obtener(doc_id)
+            if doc_check is not None:
+                exports_previos = sum(1 for e in doc_check.audit_trail if e.tipo == "exportado")
+                es_primer_export = exports_previos == 0
+
             if idioma in ("es_normalize", "en_normalize"):
                 spinner_msg = "Detectando idiomas, traduciendo y generando DOCX…"
             else:
@@ -194,7 +202,14 @@ def _dialog_exportar_docx(documento_id_str: str) -> None:
                 )
             st.session_state[bytes_key] = resultado.contenido
             st.session_state[nombre_key] = resultado.nombre_archivo
-            st.toast("DOCX generado.", icon="📄")
+            if es_primer_export:
+                # Celebración del primer export — Zeigarnik cierra, dopamina sube.
+                # `st.balloons` es built-in (sin streamlit-extras), bandera persiste
+                # implícita en audit_trail (el evento `exportado` ya quedó registrado).
+                st.balloons()
+                st.toast("¡Primer DOCX exportado! 🎉", icon="🎉")
+            else:
+                st.toast("DOCX generado.", icon="📄")
             st.rerun()
         except Exception as e:
             st.error(f"Error al exportar: {e}")
@@ -510,14 +525,38 @@ def _render_gobernanza(documento: Documento) -> None:
                         key=f"export_prophet_{doc_id_str}",
                         help="Genera la Ficha Prophet en formato .docx.",
                     ):
+                        from datetime import UTC, datetime
+
+                        from src.core.models import EventoAuditoria
                         from src.core.usecases import DocxWriterProphet
 
                         try:
+                            exports_previos_prophet = sum(
+                                1 for e in documento.audit_trail if e.tipo == "exportado"
+                            )
+                            es_primer_export_prophet = exports_previos_prophet == 0
+
                             with st.spinner("Generando Ficha Prophet..."):
                                 docx_bytes = DocxWriterProphet().render(documento)
                             nombre_archivo = f"Ficha_Prophet_{documento.metadata_modelo.nombre_modelo.replace(' ', '_')}.docx"
+                            # Registrar el evento `exportado` para trazabilidad MRM
+                            # y para detectar primer-export en futuros clicks.
+                            documento.registrar_evento(
+                                EventoAuditoria(
+                                    timestamp=datetime.now(UTC),
+                                    actor="default",
+                                    tipo="exportado",
+                                    descripcion=(
+                                        f"Ficha Prophet exportada ({len(docx_bytes):,} bytes)."
+                                    ),
+                                )
+                            )
+                            DocumentoRepository().guardar(documento)
                             st.session_state[bytes_key] = docx_bytes
                             st.session_state[nombre_key] = nombre_archivo
+                            if es_primer_export_prophet:
+                                st.balloons()
+                                st.toast("¡Primera Ficha Prophet exportada! 🎉", icon="🎉")
                             st.rerun()
                         except FileNotFoundError as e:
                             st.warning(str(e))
