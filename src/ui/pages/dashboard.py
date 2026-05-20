@@ -327,7 +327,7 @@ def _dialog_editar_metadata(documento_id_str: str) -> None:
             )
         )
         repo.guardar(doc)
-        st.toast("Metadata actualizada.", icon="✏️")
+        st.toast("Metadata actualizada.", icon=":material/edit:")
         st.rerun()
 
 

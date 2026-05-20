@@ -107,7 +107,7 @@ def _render_undo_banner(repo: DocumentoRepository, user_id: str) -> None:
                     archivar_uc.desarchivar(doc_uuid, actor=user_id)
                 else:
                     archivar_uc.restaurar_de_papelera(doc_uuid, actor=user_id)
-                st.toast(f"\"{nombre}\" restaurado.", icon="↩️")
+                st.toast(f"\"{nombre}\" restaurado.", icon=":material/undo:")
             except Exception as e:
                 st.error(f"No se pudo deshacer: {e}")
             del st.session_state["undo_visibilidad"]
@@ -326,25 +326,27 @@ def _render_lista_documentos(repo: DocumentoRepository, user_id: str, *, modo: s
                 col_arch, col_pap, _ = st.columns([1, 1, 4])
                 with col_arch:
                     if st.button(
-                        "📦 Archivar",
+                        "Archivar",
                         key=f"arch_{doc.id}",
                         use_container_width=True,
+                        icon=":material/archive:",
                         help="Oculta este documento de la vista principal sin borrarlo.",
                     ):
                         archivar_uc.archivar(doc.id, actor=user_id)
                         _set_undo_visibilidad(tipo="archivar", doc_id=doc.id, nombre=nombre)
-                        st.toast(f"\"{nombre}\" archivado.", icon="📦")
+                        st.toast(f"\"{nombre}\" archivado.", icon=":material/archive:")
                         st.rerun()
                 with col_pap:
                     if st.button(
-                        "🗑️ Papelera",
+                        "Papelera",
                         key=f"trash_{doc.id}",
                         use_container_width=True,
+                        icon=":material/delete:",
                         help="Mueve a papelera. Se purga automáticamente tras 30 días.",
                     ):
                         archivar_uc.enviar_a_papelera(doc.id, actor=user_id)
                         _set_undo_visibilidad(tipo="papelera", doc_id=doc.id, nombre=nombre)
-                        st.toast(f"\"{nombre}\" movido a papelera.", icon="🗑️")
+                        st.toast(f"\"{nombre}\" movido a papelera.", icon=":material/delete:")
                         st.rerun()
             elif modo == "papelera":
                 # Indicar días restantes hasta auto-purge

@@ -123,7 +123,7 @@ def _render_panel_preview(documento_id: UUID, seccion_id: str) -> None:
                 f"({ap.nombre_archivo_original})</span>"
             )
             st.markdown(
-                f"- 📎 **{ap.titulo}** {archivo_meta}",
+                f"- **{ap.titulo}** {archivo_meta}",
                 unsafe_allow_html=True,
             )
 
@@ -207,11 +207,11 @@ def render() -> None:
         # y fórmulas LaTeX (botón aparte abajo).
         es_data_heavy = es_seccion_data_heavy(seccion_id)
         label_expander = (
-            "📎 Adjuntar apéndice (sección típicamente data-heavy)"
+            "Adjuntar apéndice (sección típicamente data-heavy)"
             if es_data_heavy
-            else "📎 Adjuntar apéndice (opcional)"
+            else "Adjuntar apéndice (opcional)"
         )
-        with st.expander(label_expander, expanded=False):
+        with st.expander(label_expander, expanded=False, icon=":material/attach_file:"):
             st.caption(
                 "**Tabla (Excel/CSV)** — cada hoja se guarda como un apéndice. "
                 "**PDF** — cada página se embebe como imagen al exportar; útil para "
@@ -270,7 +270,7 @@ def render() -> None:
                         st.toast(
                             f"Apéndice PDF '{resultado_pdf.apendice.titulo}' creado "
                             f"({resultado_pdf.n_paginas} página(s))",
-                            icon="📎",
+                            icon=":material/attach_file:",
                         )
                     else:
                         with st.spinner("Leyendo hojas y creando apéndice(s)…"):
@@ -290,13 +290,13 @@ def render() -> None:
                             st.toast(
                                 f"Apéndice '{r.apendice.titulo}' creado "
                                 f"({r.tabla.n_filas}×{r.tabla.n_columnas})",
-                                icon="📎",
+                                icon=":material/attach_file:",
                             )
                         else:
                             st.toast(
                                 f"{len(resultados)} apéndices creados desde "
                                 f"{len(resultados)} hoja(s) del Excel.",
-                                icon="📎",
+                                icon=":material/attach_file:",
                             )
                     st.rerun()
 

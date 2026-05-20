@@ -39,8 +39,9 @@ def _render_seccion(idx: int, seccion: object) -> None:
         # Solo MRM tiene editor inline (tipo de catálogo "model_development").
         # Prophet usa su propio editor especializado desde dashboard.
         if st.button(
-            "✏️ Editar",
+            "Editar",
             key=f"edit_inline_{seccion.id}",  # type: ignore[attr-defined]
+            icon=":material/edit:",
             help="Abre el editor inline en una pantalla nueva con preview en vivo.",
             use_container_width=True,
         ):
@@ -60,7 +61,7 @@ def _render_seccion(idx: int, seccion: object) -> None:
                 padding: 12px 16px; border-radius: 4px; margin: 8px 0;'>
                 <div style='color: {muted}; font-size: 0.875rem;'>
                     <em>Sección {oblig} pendiente.</em>
-                    Click ✏️ para llenarla manualmente, o usa la entrevista desde el dashboard.
+                    Click <strong>Editar</strong> para llenarla manualmente, o usa la entrevista desde el dashboard.
                 </div>
             </div>
             """,
