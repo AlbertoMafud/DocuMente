@@ -21,11 +21,15 @@ SMNYL_COLORS: dict[str, str] = {
     "border": "#bdc1c2",  # Quartz
     "success": "#4b8b7f",  # Medium Pine — solo backgrounds/iconos (3.96:1 vs blanco, falla AA como texto)
     "success_dark": "#264640",  # Dark Pine — texto sobre blanco (AAA)
+    "success_soft": "#e8f0ee",  # Pale Pine — bg para chips/banners de éxito (success_dark pasa AA encima)
     "warning": "#ce7046",  # Medium Sunset — solo backgrounds/iconos (3.48:1, falla AA como texto)
     "warning_dark": "#544235",  # Dark Sunset — texto sobre blanco (AA+)
+    "warning_soft": "#fdf4ee",  # Pale Sunset — bg para chips/banners de atención
     "danger": "#754a62",  # Dark Rose — pasa AA como texto (7.21:1)
+    "danger_soft": "#fdf2f6",  # Pale Rose — bg para chips/banners de error/crítico
     "info": "#2e86af",  # Medium Rain — solo backgrounds/iconos (4.08:1, falla AA como texto)
     "info_dark": "#0a385e",  # Dark Rain — texto sobre blanco (igual a primary_dark, AAA)
+    "info_soft": "#eef6fb",  # Pale Rain — bg para chips/banners informativos
     "accent_soft": "#b2d4e4",  # Light Rain
 }
 
@@ -77,11 +81,15 @@ def _build_css() -> str:
         --color-border: {c["border"]};
         --color-success: {c["success"]};
         --color-success-dark: {c["success_dark"]};
+        --color-success-soft: {c["success_soft"]};
         --color-warning: {c["warning"]};
         --color-warning-dark: {c["warning_dark"]};
+        --color-warning-soft: {c["warning_soft"]};
         --color-danger: {c["danger"]};
+        --color-danger-soft: {c["danger_soft"]};
         --color-info: {c["info"]};
         --color-info-dark: {c["info_dark"]};
+        --color-info-soft: {c["info_soft"]};
         --color-accent-soft: {c["accent_soft"]};
 
         --font-display: {f["display"]};

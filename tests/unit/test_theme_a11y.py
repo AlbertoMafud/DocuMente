@@ -289,5 +289,112 @@ class TestTimelineUsaDark:
         assert f"background:{SMNYL_COLORS['success']}" in html.replace(" ", "")
 
 
+# --- Tokens soft existen (QW#5) ---
+
+
+class TestTokensSoftExisten:
+    """Las variantes soft (backgrounds claros) deben existir en SMNYL_COLORS.
+
+    Reemplazan colores hex hardcoded en chat_bubble.py y vista_previa.py.
+    """
+
+    def test_success_soft_existe(self) -> None:
+        assert "success_soft" in SMNYL_COLORS
+
+    def test_warning_soft_existe(self) -> None:
+        assert "warning_soft" in SMNYL_COLORS
+
+    def test_danger_soft_existe(self) -> None:
+        assert "danger_soft" in SMNYL_COLORS
+
+    def test_info_soft_existe(self) -> None:
+        assert "info_soft" in SMNYL_COLORS
+
+
+class TestContrasteSoftConDark:
+    """Cada token *_dark debe pasar WCAG AA sobre su *_soft correspondiente."""
+
+    def test_success_dark_sobre_success_soft(self) -> None:
+        ratio = _contrast_ratio(SMNYL_COLORS["success_dark"], SMNYL_COLORS["success_soft"])
+        assert ratio >= 4.5, f"success_dark/success_soft ratio {ratio:.2f}:1 < 4.5"
+
+    def test_warning_dark_sobre_warning_soft_token(self) -> None:
+        ratio = _contrast_ratio(SMNYL_COLORS["warning_dark"], SMNYL_COLORS["warning_soft"])
+        assert ratio >= 4.5, f"warning_dark/warning_soft ratio {ratio:.2f}:1 < 4.5"
+
+    def test_danger_sobre_danger_soft(self) -> None:
+        ratio = _contrast_ratio(SMNYL_COLORS["danger"], SMNYL_COLORS["danger_soft"])
+        assert ratio >= 4.5, f"danger/danger_soft ratio {ratio:.2f}:1 < 4.5"
+
+    def test_info_dark_sobre_info_soft_token(self) -> None:
+        ratio = _contrast_ratio(SMNYL_COLORS["info_dark"], SMNYL_COLORS["info_soft"])
+        assert ratio >= 4.5, f"info_dark/info_soft ratio {ratio:.2f}:1 < 4.5"
+
+
+class TestCssExponeTokensSoft:
+    """El CSS inyectado en `:root` debe declarar las CSS variables soft."""
+
+    def test_css_declara_variables_soft(self) -> None:
+        from src.ui.theme import _build_css
+
+        css = _build_css()
+        assert "--color-success-soft:" in css
+        assert "--color-warning-soft:" in css
+        assert "--color-danger-soft:" in css
+        assert "--color-info-soft:" in css
+
+
+# --- chat_bubble usa tokens (sin hex hardcoded) ---
+
+
+class TestChatBubbleUsaTokens:
+    """chat_bubble.py no debe contener hex hardcoded; system_note usa warning_soft."""
+
+    def test_system_note_usa_warning_soft(self) -> None:
+        import inspect
+
+        from src.ui.components import chat_bubble
+
+        src = inspect.getsource(chat_bubble)
+        # El bg de system_note debe referenciar el token, no un hex
+        assert 'SMNYL_COLORS["warning_soft"]' in src or "warning_soft" in src
+        # No debe haber el hex original hardcoded
+        assert "#fef9e7" not in src
+
+
+# --- vista_previa usa tokens (sin hex hardcoded para placeholder) ---
+
+
+class TestVistaPreviaUsaTokens:
+    """vista_previa.py: el placeholder de sección vacía usa warning_soft (no hex)."""
+
+    def test_placeholder_usa_warning_soft(self) -> None:
+        import inspect
+
+        from src.ui.pages import vista_previa
+
+        src = inspect.getsource(vista_previa)
+        assert 'SMNYL_COLORS["warning_soft"]' in src
+        # No debe haber el hex original hardcoded del placeholder
+        assert "#fdf6e3" not in src
+
+
+# --- gap_badge usa tokens en lugar de hex hardcoded ---
+
+
+class TestGapBadgeUsaTokensSoft:
+    """gap_badge.py: backgrounds desde tokens *_soft, no hex hardcoded."""
+
+    def test_no_hex_hardcoded(self) -> None:
+        import inspect
+
+        from src.ui.components import gap_badge
+
+        src = inspect.getsource(gap_badge)
+        assert "#fdf2f6" not in src, "danger_soft hex no debe estar hardcoded"
+        assert "#fdf4ee" not in src, "warning_soft hex no debe estar hardcoded"
+        assert "#eef6fb" not in src, "info_soft hex no debe estar hardcoded"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
