@@ -11,6 +11,11 @@ dependencies = [
     "streamlit>=1.36.0",
     "streamlit-extras>=0.4.7",
 
+    # API REST — Fase 1 del rewrite premium (Next.js frontend irá contra esto)
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.30.0",
+    "python-multipart>=0.0.7",  # uploads multipart/form-data
+
     # LLM
     # >=0.50 requerido para parámetro `thinking`. En EC2: `pip install -e ".[dev]"` post-pull.
     "anthropic>=0.50.0",
