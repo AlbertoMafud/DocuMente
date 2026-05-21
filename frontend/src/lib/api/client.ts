@@ -7,6 +7,8 @@
  * No usa ninguna lib externa (axios, ofetch) — `fetch` nativo es suficiente,
  * tipado es lo único crítico aquí.
  */
+import { streamSse } from "@/lib/sse/streamSse";
+
 import type {
   AccionVisibilidadRequest,
   Apendice,
@@ -131,6 +133,29 @@ export const documentosApi = {
       throw new APIError(res.status, detail);
     }
     return (await res.json()) as CrearConFuentesResponse;
+  },
+
+  /**
+   * Versión streaming de `crearConFuentes` — devuelve un iterator de eventos
+   * SSE (`created`, `progress`, `done`, `error`). El caller los consume con
+   * `for await`. Ver `streamSse` en `lib/sse/streamSse.ts`.
+   */
+  crearConFuentesStream(
+    nombre_modelo: string,
+    fuentes: File[],
+    actor: string = "default",
+    describir_imagenes: boolean = false,
+  ) {
+    const fd = new FormData();
+    fd.append("nombre_modelo", nombre_modelo);
+    fd.append("actor", actor);
+    fd.append("describir_imagenes", String(describir_imagenes));
+    for (const f of fuentes) fd.append("fuentes", f);
+    const headers: Record<string, string> = {};
+    if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
+    return streamSse(`${API_URL}/documentos/crear-con-fuentes/stream`, fd, {
+      headers,
+    });
   },
 
   editarMetadata: (id: string, payload: EditarMetadataRequest) =>
