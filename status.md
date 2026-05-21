@@ -2,7 +2,7 @@
 
 > Estado vivo del proyecto. Se lee al iniciar sesión y se actualiza al cerrar si hubo cambios significativos.
 
-**Última actualización:** 2026-05-20 (sesión 16 — feedback post-demo S15 atendido: markdown preview, selector idioma export, fuentes en crear, visión Claude para imágenes embebidas, versionado funcional ver/descargar/restaurar, docs MODEL_TIERING + audit Prophet Fase 0 + agenda MA. **10 commits S16 sobre S15.** Tests: 436 unit + 7 E2E.)
+**Última actualización:** 2026-05-20 (sesión 17 — paralelización LLM + streaming SSE: latencia ~10 min → ~1-2 min y barra de progreso en vivo en lugar de pantalla en blanco. **5 commits S17 sobre S16.** Tests: 439 unit + 7 E2E.)
 
 ---
 
@@ -1083,6 +1083,46 @@ Sesión corta y enfocada: ejecutar los 3 entregables de "opción A" aprobados al
 - **Backend stale en background**: si arrancas uvicorn manualmente para debug (curl) y se queda corriendo, Playwright lo reusa por `reuseExistingServer: true` y enmascara fixes recientes. Matarlo antes de re-correr el test.
 - **`git worktree remove` en Windows** falla con "Permission denied" si el shell está parado dentro del worktree. Necesitas cerrar la sesión o cambiar de cwd primero.
 - **Em-dash en nombres de modelo**: AHORA SÍ funciona en export. Antes era un bug latente que nadie había notado porque los tests usaban ASCII.
+
+### Sesión 17 (2026-05-20) — paralelización LLM + streaming SSE
+
+Después del fix del toast realista (~10 min) Alberto pidió implementar
+las 2 mejoras técnicas que mencioné: paralelización + streaming en UI.
+Decisión cerrada: A+B juntas, NO cambiar tier Opus→Sonnet (sin eval).
+
+**5 commits S17 (en orden, sobre `54ae8d6`):**
+
+| Commit | Fase | Qué hizo |
+|---|---|---|
+| `7f44070` | A1+A2+A3 | AsyncAnthropic + chat_async + SugerenciasMultiFuente paralelo + 3 tests (paralelismo medido) |
+| `5beb7cb` | B1 | Endpoint POST /documentos/crear-con-fuentes/stream con SSE (created/progress/done/error) |
+| `60b24b3` | B2 | Frontend: streamSse helper + ProgressPanel con barra + lista en vivo + ETA |
+
+**Diseño clave:**
+- `AnthropicClient` ahora ofrece `chat()` (sync, legacy) y `chat_async()`
+  (new). Use cases viejos sin cambios.
+- `SugerenciasMultiFuente.ejecutar_async()` con `asyncio.gather` +
+  `Semaphore(5)` por default. `ejecutar()` sync wrapper compatible.
+- Endpoint SSE usa `StreamingResponse` nativo de FastAPI (sin deps
+  nuevas como sse-starlette).
+- Frontend: `EventSource` nativo no sirve para POST multipart; helper
+  `streamSse` parsea SSE sobre `fetch` + `ReadableStream`.
+- UI: barra de progreso shadcn + lista de secciones con badge de estado
+  (poblada / sin_info / error) + ETA calculado del ritmo real.
+
+**Resultado UX:**
+- Antes: pantalla en blanco ~10 min con toast "típicamente ~10 min".
+- Después: progreso en vivo con secciones rellenándose una a una; latencia
+  total real ~1-2 min con paralelización (~6-10× speedup), y el usuario
+  ve actividad desde el segundo 1.
+
+**Lo que NO se hizo (deliberadamente):**
+- Cambiar tier Opus→Sonnet (sin eval framework — documentado en
+  `docs/MODEL_TIERING.md`).
+- Convertir `crear_con_fuentes` (sync) en async — coexiste con el stream,
+  no se necesita.
+- Test E2E del flujo streaming — no trivial con SSE en Playwright; se
+  validó vía unit tests del use case + smoke manual del endpoint.
 
 ### Sesión 16 (2026-05-20) — feedback post-demo S15 atendido
 
