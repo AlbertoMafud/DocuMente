@@ -256,3 +256,25 @@ class VersionRepository:
     def ultima_version(self, documento_id: UUID) -> Version | None:
         versiones = self.listar_por_documento(documento_id)
         return versiones[-1] if versiones else None
+
+    def por_doc_y_numero(self, documento_id: UUID, numero: int) -> Version | None:
+        """Devuelve la versión `numero` del documento, o None si no existe."""
+        with session_scope() as s:
+            stmt = (
+                select(VersionRow)
+                .where(VersionRow.documento_id == str(documento_id))
+                .where(VersionRow.numero == numero)
+                .limit(1)
+            )
+            row = s.execute(stmt).scalar_one_or_none()
+            if row is None:
+                return None
+            return Version(
+                id=UUID(row.id),
+                documento_id=UUID(row.documento_id),
+                numero=row.numero,
+                snapshot_json=row.snapshot_json,
+                hash_contenido=row.hash_contenido,
+                comentario=row.comentario,
+                creado_en=row.creado_en,
+            )

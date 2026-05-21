@@ -56,6 +56,11 @@ from src.core.usecases.importar_registro_prophet import (
 from src.core.usecases.interview_engine import InterviewEngine
 from src.core.usecases.knowledge_extractor import KnowledgeExtractor
 from src.core.usecases.omitir_seccion import MOTIVOS_OMISION, OmitirSeccion
+from src.core.usecases.restaurar_version import (
+    RestaurarVersion,
+    ResultadoRestaurar,
+    VersionNoEncontrada,
+)
 from src.core.usecases.table_extractor import TableExtractor, TableSchema
 
 __all__ = [
@@ -84,6 +89,7 @@ __all__ = [
     "OmitirSeccion",
     "RegistrarSignoff",
     "ResponderPregunta",
+    "RestaurarVersion",
     "ResultadoAdjuntar",
     "ResultadoAdjuntarFormula",
     "ResultadoAdjuntarPdf",
@@ -93,12 +99,14 @@ __all__ = [
     "ResultadoImportacion",
     "ResultadoImportacionProphet",
     "ResultadoPolish",
+    "ResultadoRestaurar",
     "ResultadoVisibilidad",
     "SugerenciaPolish",
     "TableExtractor",
     "TableSchema",
     "TransicionRechazada",
     "TurnoEntrevista",
+    "VersionNoEncontrada",
     "es_seccion_data_heavy",
     "purgar_papelera_expirada",
 ]
