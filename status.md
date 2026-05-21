@@ -2,13 +2,13 @@
 
 > Estado vivo del proyecto. Se lee al iniciar sesión y se actualiza al cerrar si hubo cambios significativos.
 
-**Última actualización:** 2026-05-20 (sesión 15 — cierre opción A + extensión: CORS env var, fix Unicode em-dash export, Playwright suite escalada 1→7 tests con README en español. **5 commits adicionales sobre S14, push a `claude/affectionate-noether-8e038f`**. Tests: 528 Python + 7 E2E.)
+**Última actualización:** 2026-05-20 (sesión 16 — feedback post-demo S15 atendido: markdown preview, selector idioma export, fuentes en crear, visión Claude para imágenes embebidas, versionado funcional ver/descargar/restaurar, docs MODEL_TIERING + audit Prophet Fase 0 + agenda MA. **10 commits S16 sobre S15.** Tests: 436 unit + 7 E2E.)
 
 ---
 
 ## Estado actual
 
-**MVP + Prophet Fase 0 + Fase A + B + C + D.2 (S13) + Remediación UX completa + Rewrite arquitectónico a 3 servicios (S14) + Cierre técnico opción A (S15)** todo en el branch `claude/affectionate-noether-8e038f`. Solo A.1.c (Cognito multi-tenant real) queda bloqueado pendiente reunión Vidal. D.1 (Prophet correctivos + demo MA) pendiente.
+**MVP + Prophet Fase 0 + Fase A + B + C + D.2 (S13) + Remediación UX completa + Rewrite arquitectónico a 3 servicios (S14) + Cierre técnico opción A (S15) + Feedback post-demo (S16)** todo en el branch `claude/affectionate-noether-8e038f`. Solo A.1.c (Cognito multi-tenant real) queda bloqueado pendiente reunión Vidal. D.1 (Prophet correctivos + demo MA) pendiente reunión MA — agenda preparada en `docs/PROPHET_AGENDA_MA.md`.
 
 **Arquitectura nueva (S14):** la app ahora tiene 3 servicios coexistentes:
 
@@ -1083,6 +1083,41 @@ Sesión corta y enfocada: ejecutar los 3 entregables de "opción A" aprobados al
 - **Backend stale en background**: si arrancas uvicorn manualmente para debug (curl) y se queda corriendo, Playwright lo reusa por `reuseExistingServer: true` y enmascara fixes recientes. Matarlo antes de re-correr el test.
 - **`git worktree remove` en Windows** falla con "Permission denied" si el shell está parado dentro del worktree. Necesitas cerrar la sesión o cambiar de cwd primero.
 - **Em-dash en nombres de modelo**: AHORA SÍ funciona en export. Antes era un bug latente que nadie había notado porque los tests usaban ASCII.
+
+### Sesión 16 (2026-05-20) — feedback post-demo S15 atendido
+
+Tras el demo S15 Alberto identificó 6 puntos del producto (A1-A6) y 8
+sobre Prophet (B1-B2.8). Se ejecutaron 5 fases en un branch dedicado
+`claude/s16-feedback-pasada-1` (fast-forward a affectionate-noether al cierre).
+
+**10 commits S16 (en orden, sobre `274aceb`):**
+
+| Commit | Fase | Qué hizo |
+|---|---|---|
+| `b60a858` | F1.A3 | Preview con react-markdown + remark-gfm (negritas, tablas) |
+| `79769aa` | F1.A5 | Selector de idioma en exportar DOCX (5 opciones, dropdown) |
+| `ba8f296` | F1.A2 | Crear desde cero acepta fuentes opcionales (PDFs, Excel, etc.) |
+| `f73f3c5` | F2.A1 | Visión Claude Haiku 4.5 multimodal + cache sha256 + 7 tests |
+| `d31942a` | F2.A1 | Checkbox de visión en UI /crear y /importar |
+| `0ad567c` | F3.A6 | Use case RestaurarVersion + 3 endpoints (ver/exportar/restaurar) |
+| `cecef18` | F3.A6 | UI versiones con 3 botones por card + vista-previa de vN |
+| `a37a113` | F4.A4 | docs/MODEL_TIERING.md con costos y justificación + bug DATABASE_URL anotado |
+| `895343d` | F5.B | docs/PROPHET_FASE0_AUDIT.md + docs/PROPHET_AGENDA_MA.md |
+| `4d5d2c6` | cierre | Fix tests E2E para el dropdown nuevo de idiomas |
+
+**Decisiones cerradas con Alberto antes de ejecutar:**
+1. Branch nuevo desde affectionate-noether, fast-forward al cierre.
+2. A1 imágenes: visión multimodal Claude (NO OCR) — costo marginal por
+   imagen + cache por hash, sin deps de sistema.
+3. A6 versionado: alcance "ver + descargar + restaurar" — NO branches
+   Git-like (ROI dudoso, no encaja con mental model).
+
+**Lo que NO se hizo en S16 (deliberadamente):**
+- Cambiar tiering de modelos LLM (riesgo sin eval framework — documentado).
+- Módulo Prophet profundo (bloqueado por reunión MA pendiente).
+- Subir a EC2 (Vidal).
+- Cognito real (A.1.c — Vidal).
+- Pulido formal template MRM `.docx` (diferido hasta demo externa).
 
 ### Extensión de S15 — Playwright escalado a 7 tests (commit `da0fb8b`)
 
