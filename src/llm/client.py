@@ -13,6 +13,7 @@ Diseñado con tres premisas:
    - `chat` (entrevista) → Sonnet 4.6 (excelente conversacional, ~3× más barato que Opus)
    - `drafting` (borrador final) → Opus 4.7 (calidad institucional)
    - `extraction` (extracción de hechos) → Haiku 4.5 (rapidísimo, baratísimo)
+   - `vision` (describir imágenes embebidas) → Haiku 4.5 multimodal
 """
 
 from __future__ import annotations
@@ -25,7 +26,7 @@ from anthropic.types import MessageParam, TextBlockParam
 
 from src.config import get_settings
 
-Tarea = Literal["chat", "drafting", "extraction"]
+Tarea = Literal["chat", "drafting", "extraction", "vision"]
 
 
 # Mapeo default de tarea → modelo. Override-able vía Settings.
@@ -33,6 +34,7 @@ _MODELO_POR_TAREA_DEFAULT: dict[Tarea, str] = {
     "chat": "claude-sonnet-4-6",
     "drafting": "claude-opus-4-7",
     "extraction": "claude-haiku-4-5",
+    "vision": "claude-haiku-4-5",
 }
 
 
@@ -148,9 +150,10 @@ class AnthropicClient:
             # Entrevista: balance calidad/latencia/costo
             kwargs["thinking"] = {"type": "adaptive"}
             kwargs["output_config"] = {"effort": "medium"}
-        else:  # extraction
+        else:  # extraction y vision
             # Haiku 4.5 NO soporta el parámetro effort (ver shared/models.md)
-            # ni adaptive thinking en algunas versiones — usar config mínima
+            # ni adaptive thinking en algunas versiones — usar config mínima.
+            # Para vision, además, los mensajes traen content blocks tipo image.
             kwargs["thinking"] = {"type": "disabled"}
 
         response = self._client.messages.create(**kwargs)

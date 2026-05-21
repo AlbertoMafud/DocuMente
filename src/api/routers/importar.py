@@ -38,6 +38,7 @@ async def importar_documento(
         description="Fuentes adicionales para auto-poblar secciones vacías.",
     ),
     actor: str = Form(default="default"),
+    describir_imagenes: bool = Form(default=False),
     repo: DocRepoDep = None,  # type: ignore[assignment]
     llm: LlmClientDep = None,  # type: ignore[assignment]
     user: CurrentUser = "default",  # type: ignore[assignment]
@@ -71,5 +72,6 @@ async def importar_documento(
         nombre_original=nombre_ancla,
         user_id=actor or user,
         fuentes_adicionales=fuentes_adicionales or None,
+        describir_imagenes=describir_imagenes,
     )
     return DocumentoDTO.from_domain(resultado.documento)

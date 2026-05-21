@@ -28,6 +28,7 @@ from src.core.usecases.sugerencias_multifuente import (
 )
 from src.docs.readers import extraer_texto
 from src.llm import LLMClient
+from src.llm.vision_describer import VisionDescriber
 from src.storage.repositories import DocumentoRepository
 
 logger = logging.getLogger(__name__)
@@ -73,6 +74,7 @@ class CrearDocumentoEnBlanco:
         user_id: str = "default",
         *,
         fuentes_adicionales: list[tuple[IO[bytes], str]] | None = None,
+        describir_imagenes: bool = False,
     ) -> ResultadoCrearDocumento:
         nombre_clean = nombre_modelo.strip()
         model_id_clean = model_id.strip()
@@ -101,10 +103,18 @@ class CrearDocumentoEnBlanco:
 
         advertencias: list[str] = []
         fuentes_descartadas: list[str] = []
+        vision_describer: VisionDescriber | None = None
+        if describir_imagenes and self.llm is not None:
+            vision_describer = VisionDescriber(self.llm)
+
         if fuentes_adicionales:
             for archivo_fuente, nombre in fuentes_adicionales:
                 try:
-                    tipo, texto = extraer_texto(archivo_fuente, nombre)
+                    tipo, texto = extraer_texto(
+                        archivo_fuente,
+                        nombre,
+                        vision_describer=vision_describer,
+                    )
                 except Exception as exc:
                     logger.warning(
                         "No se pudo extraer texto de fuente '%s': %s",

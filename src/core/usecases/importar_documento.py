@@ -92,6 +92,7 @@ class ImportarDocumento:
         user_id: str = "default",
         *,
         fuentes_adicionales: list[tuple[IO[bytes], str]] | None = None,
+        describir_imagenes: bool = False,
     ) -> ResultadoImportacion:
         # 1. Guardar archivo en Storage
         # Leemos primero los bytes para poder inspeccionar metadata sin
@@ -127,10 +128,20 @@ class ImportarDocumento:
         fuentes_procesadas = 0
         fuentes_descartadas: list[str] = []
         advertencias: list[str] = []
+        vision_describer = None
+        if describir_imagenes and self.llm is not None:
+            from src.llm.vision_describer import VisionDescriber
+
+            vision_describer = VisionDescriber(self.llm)
+
         if fuentes_adicionales:
             for archivo_fuente, nombre in fuentes_adicionales:
                 try:
-                    tipo, texto = extraer_texto(archivo_fuente, nombre)
+                    tipo, texto = extraer_texto(
+                        archivo_fuente,
+                        nombre,
+                        vision_describer=vision_describer,
+                    )
                 except Exception as exc:
                     logger.warning(
                         "No se pudo extraer texto de fuente '%s': %s",

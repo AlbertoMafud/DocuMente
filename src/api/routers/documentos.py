@@ -146,6 +146,7 @@ async def crear_con_fuentes(
     user: CurrentUser,
     nombre_modelo: str = Form(...),
     actor: str | None = Form(default=None),
+    describir_imagenes: bool = Form(default=False),
     fuentes: list[UploadFile] = File(default=[]),  # noqa: B008
 ) -> _CrearConFuentesResponse:
     """Crea un documento MRM en blanco + opcionalmente prellena secciones
@@ -174,6 +175,7 @@ async def crear_con_fuentes(
         model_id=model_id,
         user_id=actor_final,
         fuentes_adicionales=fuentes_payload or None,
+        describir_imagenes=describir_imagenes,
     )
 
     return _CrearConFuentesResponse(
