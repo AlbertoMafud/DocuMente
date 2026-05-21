@@ -8,9 +8,17 @@
 "use client";
 
 import { useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, GitBranch, Loader2, Plus } from "lucide-react";
+import {
+  ArrowLeft,
+  Download,
+  Eye,
+  GitBranch,
+  Loader2,
+  Plus,
+  RotateCcw,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -18,16 +26,25 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useCrearVersion, useDocumento, useVersiones } from "@/lib/api/hooks";
+import {
+  useCrearVersion,
+  useDocumento,
+  useRestaurarVersion,
+  useVersiones,
+} from "@/lib/api/hooks";
+import { versionesApi } from "@/lib/api/client";
 import { tiempoRelativo } from "@/lib/utils";
 
 export default function VersionesPage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
   const docQuery = useDocumento(id);
   const versionesQuery = useVersiones(id);
   const crearVersion = useCrearVersion();
+  const restaurar = useRestaurarVersion();
   const [comentario, setComentario] = useState("");
   const [creando, setCreando] = useState(false);
+  const [confirmandoRestaurar, setConfirmandoRestaurar] = useState<number | null>(null);
 
   function handleCrear() {
     crearVersion.mutate(
@@ -39,6 +56,42 @@ export default function VersionesPage() {
           setCreando(false);
         },
         onError: (err) => toast.error(`Error: ${(err as Error).message}`),
+      },
+    );
+  }
+
+  async function handleDescargar(numero: number) {
+    const toastId = toast.loading(`Generando DOCX de v${numero}…`);
+    try {
+      const blob = await versionesApi.exportar(id, numero);
+      const nombre = docQuery.data?.metadata_modelo.nombre_modelo || "documento";
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${nombre.replace(/\s+/g, "_")}_v${numero}.docx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success(`v${numero} descargada.`, { id: toastId });
+    } catch (err) {
+      toast.error(`Error al descargar: ${(err as Error).message}`, { id: toastId });
+    }
+  }
+
+  function handleRestaurar(numero: number) {
+    restaurar.mutate(
+      { docId: id, numero },
+      {
+        onSuccess: () => {
+          toast.success(
+            `Documento restaurado a v${numero}. Se guardó un snapshot previo automático.`,
+          );
+          setConfirmandoRestaurar(null);
+          router.push(`/documentos/${id}`);
+        },
+        onError: (err) =>
+          toast.error(`Error al restaurar: ${(err as Error).message}`),
       },
     );
   }
@@ -128,6 +181,64 @@ export default function VersionesPage() {
                       {v.hash_contenido.slice(0, 8)}
                     </code>
                   </p>
+
+                  {/* Acciones */}
+                  {confirmandoRestaurar === v.numero ? (
+                    <div className="mt-3 rounded-md border border-smnyl-warning bg-smnyl-warning-soft p-3">
+                      <p className="text-xs text-smnyl-warning-dark mb-2">
+                        <strong>Esto sobrescribe tu documento actual</strong>{" "}
+                        con el contenido de v{v.numero}. Se creará un snapshot
+                        automático del estado actual antes de restaurar — no
+                        pierdes tu trabajo. ¿Continuar?
+                      </p>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          disabled={restaurar.isPending}
+                          onClick={() => handleRestaurar(v.numero)}
+                        >
+                          {restaurar.isPending && (
+                            <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                          )}
+                          Sí, restaurar
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setConfirmandoRestaurar(null)}
+                        >
+                          Cancelar
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Button variant="outline" size="sm" asChild>
+                        <Link
+                          href={`/documentos/${id}/versiones/${v.numero}/vista-previa`}
+                        >
+                          <Eye className="mr-1 h-3.5 w-3.5" />
+                          Ver
+                        </Link>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDescargar(v.numero)}
+                      >
+                        <Download className="mr-1 h-3.5 w-3.5" />
+                        Descargar DOCX
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setConfirmandoRestaurar(v.numero)}
+                      >
+                        <RotateCcw className="mr-1 h-3.5 w-3.5" />
+                        Restaurar
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </div>
             </Card>

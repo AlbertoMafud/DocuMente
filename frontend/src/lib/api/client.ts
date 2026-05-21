@@ -258,6 +258,25 @@ export const versionesApi = {
     }),
 
   obtener: (versionId: string) => request<Version>(`/versiones/${versionId}`),
+
+  /** Devuelve el snapshot del documento como estaba en vN (read-only). */
+  ver: (docId: string, numero: number) =>
+    request<Documento>(`/documentos/${docId}/versiones/${numero}`),
+
+  /** Descarga el DOCX de una versión histórica como Blob. */
+  exportar: (docId: string, numero: number) =>
+    requestBlob(`/documentos/${docId}/versiones/${numero}/exportar`, {
+      method: "POST",
+    }),
+
+  /**
+   * Restaura el documento activo al contenido de vN. Crea snapshot
+   * automático del estado actual antes de sobrescribir.
+   */
+  restaurar: (docId: string, numero: number) =>
+    request<Documento>(`/documentos/${docId}/versiones/${numero}/restaurar`, {
+      method: "POST",
+    }),
 };
 
 // ===== Apéndices =====

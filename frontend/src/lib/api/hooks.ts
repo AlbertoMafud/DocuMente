@@ -313,6 +313,26 @@ export function useCrearVersion() {
   });
 }
 
+export function useVerVersion(docId: string, numero: number | null) {
+  return useQuery({
+    queryKey: ["versiones", docId, "ver", numero],
+    queryFn: () => versionesApi.ver(docId, numero!),
+    enabled: !!docId && numero !== null && numero !== undefined,
+  });
+}
+
+export function useRestaurarVersion() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ docId, numero }: { docId: string; numero: number }) =>
+      versionesApi.restaurar(docId, numero),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: qk.versiones(vars.docId) });
+      qc.invalidateQueries({ queryKey: qk.documento(vars.docId) });
+    },
+  });
+}
+
 // ===== Apéndices =====
 
 export function useApendices(docId: string) {
