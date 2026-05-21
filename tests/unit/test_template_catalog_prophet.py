@@ -31,7 +31,12 @@ def test_tablas_tienen_schema() -> None:
 
 def test_secciones_obligatorias_correctas() -> None:
     obligatorias = {s.id for s in TEMPLATE_PROPHET if s.obligatoria}
-    for esperada in ("identificacion", "corridas_runs", "variables_criticas", "matriz_conocimiento"):
+    for esperada in (
+        "identificacion",
+        "corridas_runs",
+        "variables_criticas",
+        "matriz_conocimiento",
+    ):
         assert esperada in obligatorias
 
 

@@ -23,6 +23,16 @@ TipoEvento = Literal[
     "exportado",
     "signoff_reviewer",
     "signoff_fae",
+    # Visibilidad (Fase A.5 — archivado/papelera/purge):
+    "archivado",
+    "desarchivado",
+    "enviado_a_papelera",
+    "restaurado_de_papelera",
+    "eliminado_permanente",
+    "purgado_automatico",
+    # Versionado (Fase C.2):
+    "version_creada",
+    "version_restaurada",
 ]
 
 

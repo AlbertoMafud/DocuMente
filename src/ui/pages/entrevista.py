@@ -123,7 +123,7 @@ def _render_panel_preview(documento_id: UUID, seccion_id: str) -> None:
                 f"({ap.nombre_archivo_original})</span>"
             )
             st.markdown(
-                f"- 📎 **{ap.titulo}** {archivo_meta}",
+                f"- **{ap.titulo}** {archivo_meta}",
                 unsafe_allow_html=True,
             )
 
@@ -201,42 +201,63 @@ def render() -> None:
             unsafe_allow_html=True,
         )
 
-        # Drop zone de tablas — solo en secciones data-heavy
-        if es_seccion_data_heavy(seccion_id):
-            with st.expander(
-                "📎 Adjuntar tabla / supuestos como apéndice (opcional)",
-                expanded=False,
-            ):
-                st.caption(
-                    "Si tienes tablas de supuestos, mortalidad, lapses o data raw "
-                    "en Excel o CSV, súbelas aquí. La tabla completa se guarda "
-                    "como apéndice del documento; en la sección principal Claude "
-                    "solo redacta narrativa y la referencia."
-                )
-                titulo_tabla = st.text_input(
-                    "Título descriptivo del apéndice",
-                    placeholder=("Ej. Tabla de mortalidad SOA 2017 — Producto NIL"),
-                    key=f"titulo_apendice_{seccion_id}",
-                )
-                archivo_tabla = st.file_uploader(
-                    "Archivo (.xlsx, .xls, .csv)",
-                    type=["xlsx", "xls", "csv"],
-                    key=f"upload_apendice_{seccion_id}",
-                    label_visibility="collapsed",
-                )
-                if archivo_tabla is not None:
-                    if not titulo_tabla.strip():
-                        st.warning("Ingresa un título descriptivo antes de procesar la tabla.")
-                    elif st.button(
-                        "Procesar y crear apéndice",
-                        type="primary",
-                        key=f"btn_apendice_{seccion_id}",
-                    ):
-                        with st.spinner("Leyendo tabla y creando apéndice…"):
-                            from io import BytesIO
+        # Drop zone de apéndices — disponible en TODAS las secciones (B.3).
+        # Soporta: Excel/CSV (multi-hoja, 1 apéndice por hoja),
+        # PDF (cada página se embebe como imagen al exportar),
+        # y fórmulas LaTeX (botón aparte abajo).
+        es_data_heavy = es_seccion_data_heavy(seccion_id)
+        label_expander = (
+            "Adjuntar apéndice (sección típicamente data-heavy)"
+            if es_data_heavy
+            else "Adjuntar apéndice (opcional)"
+        )
+        with st.expander(label_expander, expanded=False, icon=":material/attach_file:"):
+            st.caption(
+                "**Tabla (Excel/CSV)** — cada hoja se guarda como un apéndice. "
+                "**PDF** — cada página se embebe como imagen al exportar; útil para "
+                "fórmulas con layout complejo, gráficas o diagramas. "
+                "**Fórmula LaTeX** — escribe la fórmula y se renderiza como imagen "
+                "(usa el botón al final del expander)."
+            )
+            titulo_tabla = st.text_input(
+                "Título descriptivo (base del apéndice)",
+                placeholder="Ej. Tabla de mortalidad SOA 2017 — Producto NIL",
+                key=f"titulo_apendice_{seccion_id}",
+                help=(
+                    "Si el Excel tiene varias hojas, cada apéndice agrega "
+                    "el nombre de la hoja al final del título."
+                ),
+            )
+            archivo_tabla = st.file_uploader(
+                "Archivo (.xlsx, .xls, .csv, .pdf)",
+                type=["xlsx", "xls", "csv", "pdf"],
+                key=f"upload_apendice_{seccion_id}",
+                label_visibility="collapsed",
+            )
+            if archivo_tabla is not None:
+                if not titulo_tabla.strip():
+                    st.warning("Ingresa un título descriptivo antes de procesar el archivo.")
+                elif st.button(
+                    "Procesar y crear apéndice(s)",
+                    type="primary",
+                    key=f"btn_apendice_{seccion_id}",
+                ):
+                    from io import BytesIO
 
+                    es_pdf = archivo_tabla.name.lower().endswith(".pdf")
+                    if es_pdf:
+                        # PDF como apéndice (C.1): cada página se embebe como imagen.
+                        from src.core.usecases import AdjuntarPdfApendice
+                        from src.storage.storage import FilesystemStorage
+
+                        pdf_uc = AdjuntarPdfApendice(
+                            storage=FilesystemStorage(DATA_DIR),
+                            doc_repo=DocumentoRepository(),
+                            estado_repo=adjuntar_uc.estado_repo,
+                        )
+                        with st.spinner("Procesando PDF y creando apéndice…"):
                             try:
-                                resultado = adjuntar_uc.ejecutar(
+                                resultado_pdf = pdf_uc.ejecutar(
                                     documento=documento,
                                     seccion=seccion,
                                     archivo=BytesIO(archivo_tabla.getvalue()),
@@ -244,14 +265,94 @@ def render() -> None:
                                     titulo=titulo_tabla.strip(),
                                 )
                             except (ValueError, OSError) as e:
-                                st.error(f"No se pudo leer la tabla: {e}")
+                                st.error(f"No se pudo procesar el PDF: {e}")
                                 return
                         st.toast(
-                            f"Apéndice '{resultado.apendice.titulo}' creado "
-                            f"({resultado.tabla.n_filas}×{resultado.tabla.n_columnas})",
-                            icon="📎",
+                            f"Apéndice PDF '{resultado_pdf.apendice.titulo}' creado "
+                            f"({resultado_pdf.n_paginas} página(s))",
+                            icon=":material/attach_file:",
                         )
-                        st.rerun()
+                    else:
+                        with st.spinner("Leyendo hojas y creando apéndice(s)…"):
+                            try:
+                                resultados = adjuntar_uc.ejecutar_multihoja(
+                                    documento=documento,
+                                    seccion=seccion,
+                                    archivo=BytesIO(archivo_tabla.getvalue()),
+                                    nombre_original=archivo_tabla.name,
+                                    titulo_base=titulo_tabla.strip(),
+                                )
+                            except (ValueError, OSError) as e:
+                                st.error(f"No se pudo leer la tabla: {e}")
+                                return
+                        if len(resultados) == 1:
+                            r = resultados[0]
+                            st.toast(
+                                f"Apéndice '{r.apendice.titulo}' creado "
+                                f"({r.tabla.n_filas}×{r.tabla.n_columnas})",
+                                icon=":material/attach_file:",
+                            )
+                        else:
+                            st.toast(
+                                f"{len(resultados)} apéndices creados desde "
+                                f"{len(resultados)} hoja(s) del Excel.",
+                                icon=":material/attach_file:",
+                            )
+                    st.rerun()
+
+            # --- Apéndice fórmula LaTeX (C.1) ---
+            st.markdown("---")
+            st.markdown("**Insertar fórmula matemática (LaTeX)**")
+            st.caption(
+                "Escribe la fórmula sin delimitadores `$`. Se renderizará como imagen "
+                "nítida en el .docx final. Subset soportado: fracciones, integrales, "
+                "sumatorias, símbolos griegos, índices/exponentes."
+            )
+            titulo_formula = st.text_input(
+                "Título de la fórmula",
+                placeholder="Ej. Valor presente actuarial",
+                key=f"titulo_formula_{seccion_id}",
+            )
+            latex_source = st.text_area(
+                "Source LaTeX (sin `$`)",
+                placeholder=r"\bar{A}_x = \int_0^\infty e^{-\delta t} \, _tp_x \, \mu_{x+t} \, dt",
+                key=f"latex_source_{seccion_id}",
+                height=100,
+            )
+            if latex_source.strip():
+                with st.container(border=True):
+                    st.markdown("**Preview** (KaTeX):")
+                    try:
+                        st.latex(latex_source)
+                    except Exception:
+                        st.caption("_(preview no disponible — verifica sintaxis)_")
+            if st.button(
+                "Insertar fórmula como apéndice",
+                key=f"btn_formula_{seccion_id}",
+                disabled=not (latex_source.strip() and titulo_formula.strip()),
+            ):
+                from src.core.usecases import AdjuntarFormulaApendice
+
+                formula_uc = AdjuntarFormulaApendice(
+                    doc_repo=DocumentoRepository(),
+                    estado_repo=adjuntar_uc.estado_repo,
+                )
+                with st.spinner("Renderizando fórmula…"):
+                    try:
+                        resultado_formula = formula_uc.ejecutar(
+                            documento=documento,
+                            seccion=seccion,
+                            latex_source=latex_source,
+                            titulo=titulo_formula.strip(),
+                        )
+                    except ValueError as e:
+                        st.error(f"No se pudo crear la fórmula: {e}")
+                        return
+                st.toast(
+                    f"Apéndice fórmula '{resultado_formula.apendice.titulo}' creado",
+                    icon="📐",
+                )
+                st.rerun()
 
         # Renderizar historial — saltamos el primer mensaje "kickoff"
         # porque es interno, el usuario no lo escribió.

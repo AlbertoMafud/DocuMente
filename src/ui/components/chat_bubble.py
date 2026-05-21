@@ -23,8 +23,8 @@ _ESTILOS: dict[str, dict[str, str]] = {
         "label": "DocuMente",
     },
     "system_note": {
-        "bg": "#fef9e7",
-        "fg": SMNYL_COLORS["text_muted"],
+        "bg": SMNYL_COLORS["warning_soft"],
+        "fg": SMNYL_COLORS["warning_dark"],
         "align": "center",
         "border_radius": "8px",
         "label": "Sistema",

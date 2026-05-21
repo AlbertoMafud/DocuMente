@@ -19,10 +19,17 @@ SMNYL_COLORS: dict[str, str] = {
     "text": "#0a3c53",  # Steel
     "text_muted": "#565656",  # Iron
     "border": "#bdc1c2",  # Quartz
-    "success": "#4b8b7f",  # Medium Pine
-    "warning": "#ce7046",  # Medium Sunset
-    "danger": "#754a62",  # Dark Rose
-    "info": "#2e86af",  # Medium Rain
+    "success": "#4b8b7f",  # Medium Pine — solo backgrounds/iconos (3.96:1 vs blanco, falla AA como texto)
+    "success_dark": "#264640",  # Dark Pine — texto sobre blanco (AAA)
+    "success_soft": "#e8f0ee",  # Pale Pine — bg para chips/banners de éxito (success_dark pasa AA encima)
+    "warning": "#ce7046",  # Medium Sunset — solo backgrounds/iconos (3.48:1, falla AA como texto)
+    "warning_dark": "#544235",  # Dark Sunset — texto sobre blanco (AA+)
+    "warning_soft": "#fdf4ee",  # Pale Sunset — bg para chips/banners de atención
+    "danger": "#754a62",  # Dark Rose — pasa AA como texto (7.21:1)
+    "danger_soft": "#fdf2f6",  # Pale Rose — bg para chips/banners de error/crítico
+    "info": "#2e86af",  # Medium Rain — solo backgrounds/iconos (4.08:1, falla AA como texto)
+    "info_dark": "#0a385e",  # Dark Rain — texto sobre blanco (igual a primary_dark, AAA)
+    "info_soft": "#eef6fb",  # Pale Rain — bg para chips/banners informativos
     "accent_soft": "#b2d4e4",  # Light Rain
 }
 
@@ -36,8 +43,8 @@ SMNYL_SPACING: dict[str, str] = {
     "sm": "8px",
     "md": "16px",
     "lg": "24px",
-    "xl": "40px",
-    "2xl": "64px",
+    "xl": "32px",
+    "2xl": "56px",
 }
 
 SMNYL_RADIUS: dict[str, str] = {
@@ -47,9 +54,9 @@ SMNYL_RADIUS: dict[str, str] = {
 }
 
 SMNYL_SHADOW: dict[str, str] = {
-    "sm": "0 1px 2px rgba(10, 60, 83, 0.06)",
-    "md": "0 4px 12px rgba(10, 60, 83, 0.08)",
-    "lg": "0 12px 32px rgba(10, 60, 83, 0.12)",
+    "sm": "0 1px 2px rgba(10, 60, 83, 0.05), 0 1px 1px rgba(10, 60, 83, 0.03)",
+    "md": "0 4px 12px rgba(10, 60, 83, 0.08), 0 2px 4px rgba(10, 60, 83, 0.04)",
+    "lg": "0 16px 40px rgba(10, 60, 83, 0.14), 0 4px 8px rgba(10, 60, 83, 0.06)",
 }
 
 
@@ -73,9 +80,16 @@ def _build_css() -> str:
         --color-text-muted: {c["text_muted"]};
         --color-border: {c["border"]};
         --color-success: {c["success"]};
+        --color-success-dark: {c["success_dark"]};
+        --color-success-soft: {c["success_soft"]};
         --color-warning: {c["warning"]};
+        --color-warning-dark: {c["warning_dark"]};
+        --color-warning-soft: {c["warning_soft"]};
         --color-danger: {c["danger"]};
+        --color-danger-soft: {c["danger_soft"]};
         --color-info: {c["info"]};
+        --color-info-dark: {c["info_dark"]};
+        --color-info-soft: {c["info_soft"]};
         --color-accent-soft: {c["accent_soft"]};
 
         --font-display: {f["display"]};
@@ -117,9 +131,9 @@ def _build_css() -> str:
         line-height: 1.2;
     }}
 
-    h1 {{ font-size: 2.25rem; font-weight: 600; margin-bottom: var(--space-md); }}
-    h2 {{ font-size: 1.75rem; font-weight: 500; margin-top: var(--space-xl); }}
-    h3 {{ font-size: 1.25rem; font-weight: 500; }}
+    h1 {{ font-size: 1.875rem; font-weight: 600; margin-bottom: var(--space-sm); letter-spacing: -0.015em; }}
+    h2 {{ font-size: 1.5rem; font-weight: 600; margin-top: var(--space-xl); letter-spacing: -0.01em; }}
+    h3 {{ font-size: 1.15rem; font-weight: 600; }}
 
     p, li, span, label {{
         font-family: var(--font-body);
@@ -134,7 +148,7 @@ def _build_css() -> str:
         border-radius: var(--radius-md);
         padding: 0.6rem 1.25rem;
         border: 1px solid transparent;
-        transition: all 150ms ease;
+        transition: all 200ms ease-out;
         box-shadow: var(--shadow-sm);
     }}
 
@@ -171,6 +185,7 @@ def _build_css() -> str:
         border: 1px solid var(--color-border);
         font-family: var(--font-body);
         color: var(--color-text);
+        transition: border-color 200ms ease-out, box-shadow 200ms ease-out;
     }}
 
     .stTextInput > div > div > input:focus,
@@ -187,6 +202,39 @@ def _build_css() -> str:
         box-shadow: var(--shadow-sm);
         padding: var(--space-md);
         background-color: var(--color-bg);
+        transition: box-shadow 200ms ease-out, border-color 200ms ease-out;
+    }}
+
+    [data-testid="stVerticalBlockBorderWrapper"]:hover {{
+        box-shadow: var(--shadow-md);
+        border-color: var(--color-accent-soft);
+    }}
+
+    /* Expander (acordeón del dashboard por capítulos NYL) */
+    [data-testid="stExpander"] {{
+        border-radius: var(--radius-md);
+        border: 1px solid var(--color-border);
+        transition: border-color 200ms ease-out, box-shadow 200ms ease-out;
+    }}
+
+    [data-testid="stExpander"]:hover {{
+        border-color: var(--color-accent-soft);
+        box-shadow: var(--shadow-sm);
+    }}
+
+    [data-testid="stExpander"] summary,
+    [data-testid="stExpander"] details > summary {{
+        transition: background-color 200ms ease-out, color 200ms ease-out;
+    }}
+
+    [data-testid="stExpander"] summary:hover,
+    [data-testid="stExpander"] details > summary:hover {{
+        background-color: var(--color-bg-soft);
+    }}
+
+    /* Tabs (Activos / Archivados / Papelera) */
+    [data-baseweb="tab"] {{
+        transition: color 200ms ease-out, border-bottom-color 200ms ease-out;
     }}
 
     /* Métricas */
@@ -224,9 +272,9 @@ def _build_css() -> str:
 
     /* Reduce el padding extra default del bloque principal */
     .block-container {{
-        padding-top: var(--space-xl);
+        padding-top: var(--space-lg);
         padding-bottom: var(--space-2xl);
-        max-width: 1200px;
+        max-width: 1320px;
     }}
     </style>
     """

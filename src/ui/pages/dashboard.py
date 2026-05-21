@@ -16,9 +16,10 @@ from uuid import UUID
 import streamlit as st
 
 from src.config import get_settings
-from src.core.models import Brecha, Documento
+from src.core.models import Brecha, Documento, Seccion
 from src.core.models.documento import EstadoDocumento
 from src.core.rules import DocumentStateMachine
+from src.core.template_catalog import agrupar_secciones_por_capitulo
 from src.core.usecases import (
     MOTIVOS_OMISION,
     CambiarEstadoDocumento,
@@ -30,7 +31,7 @@ from src.core.usecases import (
 )
 from src.llm import AnthropicClient
 from src.storage.repositories import DocumentoRepository
-from src.ui.components import gap_badge, header, seccion_card
+from src.ui.components import empty_state, header, onboarding_banner, seccion_card
 from src.ui.theme import SMNYL_COLORS
 
 _TEMPLATE_PATH = (
@@ -68,24 +69,75 @@ def _dialog_exportar_docx(documento_id_str: str) -> None:
     nombre_key = f"docx_nombre_{documento_id_str}"
 
     st.markdown(
-        "Selecciona el idioma del documento exportado. La traducción al inglés "
-        "usa Claude para mantener el tono institucional formal y preservar "
-        "vocabulario técnico-actuarial."
+        "Selecciona cómo quieres exportar el contenido. Las opciones de "
+        "*normalizar* usan Claude para detectar el idioma de cada sección y "
+        "traducir solo las que no estén en el idioma destino."
     )
 
+    opciones = [
+        "Normalizar a español",
+        "Normalizar a inglés (US corporate)",
+        "Bilingüe — exportar tal cual",
+    ]
     idioma_label = st.radio(
-        "Idioma",
-        options=["Español", "English (US corporate)"],
+        "Modo de idioma",
+        options=opciones,
         key=f"export_idioma_{documento_id_str}",
-        horizontal=True,
+        horizontal=False,
     )
-    idioma = "en" if idioma_label.startswith("English") else "es"
+    if idioma_label.startswith("Normalizar a español"):
+        idioma = "es_normalize"
+    elif idioma_label.startswith("Normalizar a inglés"):
+        idioma = "en_normalize"
+    else:
+        idioma = "bilingue"
 
-    if idioma == "en":
+    if idioma == "es_normalize":
         st.caption(
-            "La traducción dispara llamadas a Claude (~$0.01–0.05 USD según tamaño "
-            "del documento). El borrador en español NO se modifica — la traducción "
-            "vive solo en el .docx generado."
+            "Detecta el idioma de cada sección. Las que estén en inglés se "
+            "traducen al español; las que ya estén en español se preservan. "
+            "Costo aprox. $0.01–0.05 USD si hay secciones por traducir."
+        )
+    elif idioma == "en_normalize":
+        st.caption(
+            "Detecta el idioma de cada sección. Las que estén en español se "
+            "traducen al inglés corporativo americano; las que ya estén en "
+            "inglés se preservan. Costo aprox. $0.01–0.05 USD."
+        )
+    else:
+        st.caption(
+            "Exporta el contenido exactamente como lo capturaste. Útil si "
+            "tu documento es deliberadamente mixto (ej. citas en inglés "
+            "dentro de prosa en español). No dispara llamadas LLM de traducción."
+        )
+
+    st.markdown("---")
+    polish_activo = st.checkbox(
+        "Revisar coherencia narrativa con IA antes de exportar",
+        key=f"export_polish_{documento_id_str}",
+        help=(
+            "Claude lee el documento completo y reporta inconsistencias entre "
+            "secciones (cifras distintas, contradicciones, referencias rotas, "
+            "tono dissonante). Costo aprox. $0.02–0.05 USD. Las sugerencias "
+            "se muestran en pantalla — NO modifican el .docx automáticamente."
+        ),
+    )
+    crear_version_activo = st.checkbox(
+        "Crear nueva versión al exportar",
+        key=f"export_version_{documento_id_str}",
+        value=False,
+        help=(
+            "Guarda un snapshot inmutable del documento (con número, hash y "
+            "comentario). Útil para recuperar estados previos o comparar diffs. "
+            "Si exportas dos veces sin editar, no se duplica."
+        ),
+    )
+    comentario_version = ""
+    if crear_version_activo:
+        comentario_version = st.text_input(
+            "Comentario de la versión (opcional)",
+            placeholder="Ej. Cierre Q2 — supuestos actualizados",
+            key=f"export_version_comment_{documento_id_str}",
         )
 
     col_cancel, col_go = st.columns(2)
@@ -103,21 +155,61 @@ def _dialog_exportar_docx(documento_id_str: str) -> None:
         if not _TEMPLATE_PATH.exists():
             st.error(f"Plantilla maestra no encontrada en {_TEMPLATE_PATH}.")
             return
+        # Si polish activo, ejecutar primero y guardar resultado para mostrar
+        if polish_activo:
+            try:
+                with st.spinner("Revisando coherencia narrativa con Claude…"):
+                    from src.core.usecases import DocumentPolisher
+
+                    repo = DocumentoRepository()
+                    documento = repo.obtener(doc_id)
+                    llm = AnthropicClient()
+                    if documento is not None:
+                        resultado_polish = DocumentPolisher(llm).revisar(documento)
+                        # Persistir métricas (el polisher acumuló costo)
+                        repo.guardar(documento)
+                        st.session_state[f"polish_resultado_{documento_id_str}"] = resultado_polish
+            except Exception as e:
+                st.warning(
+                    f"La revisión de coherencia falló ({e.__class__.__name__}). "
+                    "Continuando con el export sin sugerencias."
+                )
         try:
-            spinner_msg = (
-                "Traduciendo y generando DOCX con marca SMNYL…"
-                if idioma == "en"
-                else "Generando DOCX con marca SMNYL…"
-            )
+            # Detectar si este es el primer export del documento (para celebración)
+            es_primer_export = False
+            repo_check = DocumentoRepository()
+            doc_check = repo_check.obtener(doc_id)
+            if doc_check is not None:
+                exports_previos = sum(1 for e in doc_check.audit_trail if e.tipo == "exportado")
+                es_primer_export = exports_previos == 0
+
+            if idioma in ("es_normalize", "en_normalize"):
+                spinner_msg = "Detectando idiomas, traduciendo y generando DOCX…"
+            else:
+                spinner_msg = "Generando DOCX con marca SMNYL…"
             with st.spinner(spinner_msg):
                 resultado = _build_export_uc(doc_id).ejecutar(
                     doc_id,
                     actor="default",
                     idioma_objetivo=idioma,  # type: ignore[arg-type]
+                    crear_version=crear_version_activo,
+                    comentario_version=comentario_version,
+                )
+            if resultado.version is not None and not resultado.version.es_duplicado:
+                st.toast(
+                    f"Versión v{resultado.version.version.numero} creada.",
+                    icon="🔖",
                 )
             st.session_state[bytes_key] = resultado.contenido
             st.session_state[nombre_key] = resultado.nombre_archivo
-            st.toast("DOCX generado.", icon="📄")
+            if es_primer_export:
+                # Celebración del primer export — Zeigarnik cierra, dopamina sube.
+                # `st.balloons` es built-in (sin streamlit-extras), bandera persiste
+                # implícita en audit_trail (el evento `exportado` ya quedó registrado).
+                st.balloons()
+                st.toast("¡Primer DOCX exportado! 🎉", icon="🎉")
+            else:
+                st.toast("DOCX generado.", icon="📄")
             st.rerun()
         except Exception as e:
             st.error(f"Error al exportar: {e}")
@@ -235,7 +327,7 @@ def _dialog_editar_metadata(documento_id_str: str) -> None:
             )
         )
         repo.guardar(doc)
-        st.toast("Metadata actualizada.", icon="✏️")
+        st.toast("Metadata actualizada.", icon=":material/edit:")
         st.rerun()
 
 
@@ -320,53 +412,98 @@ def _cargar_documento_y_brechas(
 
 def _render_resumen(documento: Documento, brechas: list[Brecha]) -> None:
     resuelto_pct = int(documento.porcentaje_resuelto * 100)
+    n_oblig = len(documento.secciones_obligatorias)
     n_completas = sum(1 for s in documento.secciones_obligatorias if s.completitud == "completa")
     n_omitidas = sum(1 for s in documento.secciones_obligatorias if s.completitud == "omitida")
     n_alta = sum(1 for b in brechas if b.severidad == "alta")
     n_media = sum(1 for b in brechas if b.severidad == "media")
     n_baja = sum(1 for b in brechas if b.severidad == "baja")
 
-    muted = SMNYL_COLORS["text_muted"]
-    text = SMNYL_COLORS["text"]
-    label_style = (
-        f"font-size: 0.75rem; color: {muted}; text-transform: uppercase; letter-spacing: 0.05em;"
-    )
-    big_style = f"font-size: 2rem; font-weight: 600; color: {text};"
+    c = SMNYL_COLORS
+    # Cards densos: label uppercase pequeño + valor 1.5rem + sub-context discreto.
+    # Borde-izquierda con color de estado para añadir jerarquía visual.
 
-    c1, c2, c3, c4, c5 = st.columns(5)
-    with c1.container(border=True):
-        st.markdown(f"<div style='{label_style}'>Resolución</div>", unsafe_allow_html=True)
-        st.markdown(
-            f"<div style='{big_style}'>{resuelto_pct}%</div>",
-            unsafe_allow_html=True,
-        )
-        st.progress(documento.porcentaje_resuelto)
-        st.caption(f"{n_completas} completa(s)")
-
-    for col, n, severidad, label in [
-        (c2, n_alta, "alta", "Críticas"),
-        (c3, n_media, "media", "Atención"),
-        (c4, n_baja, "baja", "Sugerencias"),
-    ]:
-        with col.container(border=True):
+    def _card(
+        col,
+        *,
+        label: str,
+        value: str,
+        sub: str,
+        accent: str,
+        progress_pct: int | None = None,
+    ) -> None:
+        with col:
+            progress_html = ""
+            if progress_pct is not None:
+                progress_html = (
+                    f"<div style='height: 4px; background: {c['bg_soft']}; "
+                    f"border-radius: 2px; margin-top: 6px; overflow: hidden;'>"
+                    f"<div style='width: {progress_pct}%; height: 100%; "
+                    f"background: {accent}; transition: width 400ms ease-out;'>"
+                    f"</div></div>"
+                )
             st.markdown(
-                f"<div style='{label_style}'>Brechas {label}</div>",
+                f"""
+                <div style="
+                    border: 1px solid {c['border']};
+                    border-left: 3px solid {accent};
+                    border-radius: 10px;
+                    padding: 12px 16px;
+                    background: {c['bg']};
+                    box-shadow: var(--shadow-sm);
+                    height: 100%;
+                ">
+                    <div style="font-size: 0.68rem; color: {c['text_muted']};
+                        text-transform: uppercase; letter-spacing: 0.07em;
+                        font-weight: 600; margin-bottom: 4px;">{label}</div>
+                    <div style="font-family: var(--font-display);
+                        font-size: 1.65rem; font-weight: 600; color: {c['text']};
+                        line-height: 1.1;">{value}</div>
+                    {progress_html}
+                    <div style="font-size: 0.78rem; color: {c['text_muted']};
+                        margin-top: 6px; line-height: 1.3;">{sub}</div>
+                </div>
+                """,
                 unsafe_allow_html=True,
             )
-            st.markdown(f"<div style='{big_style}'>{n}</div>", unsafe_allow_html=True)
-            gap_badge.render(severidad, label)  # type: ignore[arg-type]
 
-    with c5.container(border=True):
-        st.markdown(f"<div style='{label_style}'>Omitidas</div>", unsafe_allow_html=True)
-        st.markdown(f"<div style='{big_style}'>{n_omitidas}</div>", unsafe_allow_html=True)
-        st.markdown(
-            f"<span style='display: inline-block; padding: 2px 10px;"
-            f" border-radius: 999px; background: {SMNYL_COLORS['bg_soft']};"
-            f" color: {SMNYL_COLORS['text_muted']}; font-size: 0.75rem;"
-            f" font-weight: 600; border: 1px solid {SMNYL_COLORS['border']};"
-            f" letter-spacing: 0.02em;'>Resueltas con motivo</span>",
-            unsafe_allow_html=True,
-        )
+    c1, c2, c3, c4, c5 = st.columns(5)
+    _card(
+        c1,
+        label="Resolución",
+        value=f"{resuelto_pct}%",
+        sub=f"{n_completas} de {n_oblig} secciones obligatorias",
+        accent=c["primary"],
+        progress_pct=resuelto_pct,
+    )
+    _card(
+        c2,
+        label="Críticas",
+        value=str(n_alta),
+        sub="bloquean revisión MRM",
+        accent=c["danger"],
+    )
+    _card(
+        c3,
+        label="Atención",
+        value=str(n_media),
+        sub="resolver antes de aprobar",
+        accent=c["warning_dark"],
+    )
+    _card(
+        c4,
+        label="Sugerencias",
+        value=str(n_baja),
+        sub="mejoras opcionales",
+        accent=c["info_dark"],
+    )
+    _card(
+        c5,
+        label="Omitidas",
+        value=str(n_omitidas),
+        sub="resueltas con motivo",
+        accent=c["text_muted"],
+    )
 
 
 def _build_export_uc(documento_id: UUID) -> ExportarDocumento:
@@ -433,13 +570,38 @@ def _render_gobernanza(documento: Documento) -> None:
                         key=f"export_prophet_{doc_id_str}",
                         help="Genera la Ficha Prophet en formato .docx.",
                     ):
+                        from datetime import UTC, datetime
+
+                        from src.core.models import EventoAuditoria
                         from src.core.usecases import DocxWriterProphet
+
                         try:
+                            exports_previos_prophet = sum(
+                                1 for e in documento.audit_trail if e.tipo == "exportado"
+                            )
+                            es_primer_export_prophet = exports_previos_prophet == 0
+
                             with st.spinner("Generando Ficha Prophet..."):
                                 docx_bytes = DocxWriterProphet().render(documento)
                             nombre_archivo = f"Ficha_Prophet_{documento.metadata_modelo.nombre_modelo.replace(' ', '_')}.docx"
+                            # Registrar el evento `exportado` para trazabilidad MRM
+                            # y para detectar primer-export en futuros clicks.
+                            documento.registrar_evento(
+                                EventoAuditoria(
+                                    timestamp=datetime.now(UTC),
+                                    actor="default",
+                                    tipo="exportado",
+                                    descripcion=(
+                                        f"Ficha Prophet exportada ({len(docx_bytes):,} bytes)."
+                                    ),
+                                )
+                            )
+                            DocumentoRepository().guardar(documento)
                             st.session_state[bytes_key] = docx_bytes
                             st.session_state[nombre_key] = nombre_archivo
+                            if es_primer_export_prophet:
+                                st.balloons()
+                                st.toast("¡Primera Ficha Prophet exportada! 🎉", icon="🎉")
                             st.rerun()
                         except FileNotFoundError as e:
                             st.warning(str(e))
@@ -474,11 +636,132 @@ def _render_gobernanza(documento: Documento) -> None:
 
         st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
 
+        # Resultado del DocumentPolisher si se ejecutó en el último export (B.2)
+        _render_polish_resultado(doc_id_str)
+
+        # Historial de versiones (C.2)
+        _render_historial_versiones(documento.id)
+
         # Sign-offs si aplican al estado actual
         _render_signoffs(documento)
 
         # Acciones de transición
         _render_acciones_estado(documento, sm)
+
+
+def _render_historial_versiones(documento_id) -> None:  # type: ignore[no-untyped-def]
+    """Muestra timeline de versiones del documento (C.2)."""
+    from src.storage.repositories import VersionRepository
+
+    versiones = VersionRepository().listar_por_documento(documento_id)
+    if not versiones:
+        return
+
+    n = len(versiones)
+    header = f"🔖 Historial de versiones ({n})"
+    with st.expander(header, expanded=False):
+        st.caption(
+            "Cada export con la opción 'Crear nueva versión' guarda un snapshot "
+            "inmutable. Si exportas el mismo estado dos veces no se duplica."
+        )
+        for v in reversed(versiones):  # más reciente arriba
+            with st.container(border=True):
+                col_info, col_meta = st.columns([3, 2])
+                with col_info:
+                    titulo = f"**v{v.numero}**"
+                    if v.comentario:
+                        titulo += f" — {v.comentario}"
+                    st.markdown(titulo)
+                    st.caption(
+                        f"Hash: `{v.hash_contenido[:12]}…` · "
+                        f"{len(v.snapshot_json):,} bytes de snapshot"
+                    )
+                with col_meta:
+                    st.caption(v.creado_en.strftime("%Y-%m-%d %H:%M"))
+
+
+def _render_polish_resultado(doc_id_str: str) -> None:
+    """Muestra las sugerencias del DocumentPolisher (si las hay en session_state).
+
+    Las sugerencias se generan en el modal de export cuando el toggle "Revisar
+    coherencia" está activo. Se renderean aquí (no en el modal) porque pueden
+    ser muchas y necesitan un expander con scroll.
+    """
+    key = f"polish_resultado_{doc_id_str}"
+    resultado = st.session_state.get(key)
+    if resultado is None:
+        return
+    if not resultado.ejecutado:
+        return
+
+    n_alta = resultado.n_alta
+    n_media = resultado.n_media
+    n_baja = resultado.n_baja
+    total = len(resultado.sugerencias)
+
+    if total == 0 and not resultado.hubo_errores:
+        with st.expander("✅ Revisión de coherencia: sin observaciones", expanded=False):
+            st.caption(
+                "Claude revisó el documento completo y no detectó inconsistencias, "
+                "contradicciones, referencias rotas ni problemas de redacción "
+                "cross-seccional. Última corrida vinculada al export más reciente."
+            )
+        return
+
+    if resultado.hubo_errores:
+        with st.expander("⚠️ Revisión de coherencia: falló", expanded=False):
+            for err in resultado.errores:
+                st.caption(err)
+        return
+
+    header = f"📝 Revisión de coherencia: {total} observación(es)"
+    if n_alta:
+        header += f" · {n_alta} alta"
+    if n_media:
+        header += f" · {n_media} media"
+    if n_baja:
+        header += f" · {n_baja} baja"
+
+    with st.expander(header, expanded=n_alta > 0):
+        st.caption(
+            "Las sugerencias NO se aplicaron al DOCX automáticamente. Edita "
+            "manualmente las secciones afectadas y vuelve a exportar si quieres "
+            "reflejar los cambios."
+        )
+        colores = {
+            "alta": SMNYL_COLORS["danger"],
+            "media": SMNYL_COLORS["warning"],
+            "baja": SMNYL_COLORS["text_muted"],
+        }
+        for sug in resultado.sugerencias:
+            color = colores.get(sug.severidad, SMNYL_COLORS["text_muted"])
+            secciones_str = ", ".join(sug.secciones_afectadas)
+            st.markdown(
+                f"""
+                <div style="
+                    border-left: 3px solid {color};
+                    padding: 8px 12px;
+                    margin: 8px 0;
+                    background-color: {SMNYL_COLORS["bg_soft"]};
+                    border-radius: 4px;
+                ">
+                    <div style="font-weight: 600; color: {color}; font-size: 0.85rem;
+                        text-transform: uppercase; letter-spacing: 0.04em;">
+                        {sug.severidad} · {sug.tipo.replace("_", " ")}
+                    </div>
+                    <div style="margin-top: 4px; color: {SMNYL_COLORS["text"]};">
+                        {sug.descripcion}
+                    </div>
+                    <div style="margin-top: 4px; font-size: 0.8rem;
+                        color: {SMNYL_COLORS["text_muted"]};">
+                        Secciones: <code>{secciones_str}</code>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            if sug.texto_sugerido:
+                st.caption(f"Sugerencia: {sug.texto_sugerido}")
 
 
 def _render_signoffs(documento: Documento) -> None:
@@ -587,6 +870,135 @@ def _render_acciones_estado(documento: Documento, sm: DocumentStateMachine) -> N
                     st.rerun()
 
 
+_SEVERIDAD_LABELS: dict[str, tuple[str, str, str]] = {
+    # severidad -> (label_humano, color_token, ícono Material)
+    "alta": ("Críticas", "danger", "priority_high"),
+    "media": ("Atención", "warning_dark", "warning"),
+    "baja": ("Sugerencias", "info_dark", "lightbulb"),
+}
+
+
+def _render_brechas_agrupadas(
+    brechas: list[Brecha], text_color: str, muted_color: str
+) -> None:
+    """Renderiza las brechas en 3 expanders por severidad — el primer grupo
+    no vacío arranca expandido para guiar la atención (goal-gradient).
+
+    Reemplaza la lista plana de cards (anteriormente 80px/brecha × 20 =
+    ~1600px de scroll) por un accordion compacto con filas indentadas
+    de ~40px cada una.
+    """
+    from collections import defaultdict
+
+    por_sev: dict[str, list[Brecha]] = defaultdict(list)
+    for b in brechas:
+        por_sev[b.severidad].append(b)
+
+    ya_expandido = False
+    for sev_key in ("alta", "media", "baja"):
+        grupo = por_sev.get(sev_key, [])
+        if not grupo:
+            continue
+        label, _color_token, icono_mat = _SEVERIDAD_LABELS[sev_key]
+        expandir = not ya_expandido
+        ya_expandido = ya_expandido or expandir
+        header = f"{label}  ·  {len(grupo)}"
+        with st.expander(header, expanded=expandir, icon=f":material/{icono_mat}:"):
+            for b in grupo:
+                # Fila compacta con borde inferior (no card pesada).
+                msg_html = (
+                    f"<div style='color: {text_color}; font-weight: 500; "
+                    f"line-height: 1.4;'>{b.mensaje}</div>"
+                )
+                if b.sugerencia:
+                    msg_html += (
+                        f"<div style='color: {muted_color}; font-size: 0.85rem; "
+                        f"margin-top: 2px; line-height: 1.4;'>"
+                        f"<span style='font-style: italic;'>Sugerencia:</span> "
+                        f"{b.sugerencia}</div>"
+                    )
+                st.markdown(
+                    f"<div style='padding: 8px 0; "
+                    f"border-bottom: 1px solid {SMNYL_COLORS['border']};'>"
+                    f"{msg_html}</div>",
+                    unsafe_allow_html=True,
+                )
+
+
+def _primer_capitulo_con_pendientes(
+    grupos: list[tuple[str, str, list[Seccion]]],
+    brechas: list[Brecha],
+) -> str | None:
+    """Devuelve el número del primer capítulo que tiene brechas críticas o
+    secciones vacías/parciales. Si no hay pendientes, devuelve `None`.
+
+    El dashboard expande automáticamente ese capítulo para guiar al usuario
+    al trabajo que sigue (goal-gradient effect del audit UX).
+    """
+    seccion_ids_con_brecha_alta = {b.seccion_id for b in brechas if b.severidad == "alta"}
+    for cap_num, _, secs in grupos:
+        if not secs:
+            continue
+        tiene_brecha_alta = any(s.id in seccion_ids_con_brecha_alta for s in secs)
+        tiene_pendientes = any(s.completitud in ("vacia", "parcial") for s in secs)
+        if tiene_brecha_alta or tiene_pendientes:
+            return cap_num
+    return None
+
+
+def _render_seccion_con_acciones(
+    documento: Documento,
+    seccion: Seccion,
+    brechas_por_seccion: dict[str, int],
+) -> None:
+    """Renderiza una SectionCard + sus botones de acción contextuales."""
+    seccion_card.render(
+        seccion,
+        brechas_count=brechas_por_seccion.get(seccion.id, 0),
+    )
+    if seccion.completitud == "omitida":
+        if st.button(
+            "Reactivar",
+            key=f"reactivar_{seccion.id}",
+            use_container_width=True,
+            help="Vuelve la sección a 'vacía' para retomarla.",
+        ):
+            repo_reset = DocumentoRepository()
+            doc_reset = repo_reset.obtener(documento.id)
+            if doc_reset is not None:
+                seccion_reset = doc_reset.seccion_por_id(seccion.id)
+                if seccion_reset is not None:
+                    seccion_reset.completitud = "vacia"
+                    seccion_reset.motivo_omision = None
+                    repo_reset.guardar(doc_reset)
+                    st.toast(f"Sección {seccion.numero} reactivada.", icon="↩️")
+                    st.rerun()
+    else:
+        col_int, col_omit = st.columns(2)
+        with col_int:
+            if st.button(
+                "Entrevistar",
+                key=f"interview_{seccion.id}",
+                use_container_width=True,
+            ):
+                st.session_state["seccion_entrevista_id"] = seccion.id
+                st.session_state["pagina"] = "entrevista"
+                st.rerun()
+        with col_omit:
+            if st.button(
+                "Omitir",
+                key=f"omitir_{seccion.id}",
+                use_container_width=True,
+                help="Marcar como omitida con motivo justificado.",
+            ):
+                _dialog_omitir_seccion(
+                    str(documento.id),
+                    seccion.id,
+                    f"{seccion.numero} {seccion.nombre}",
+                    seccion.intencion or "",
+                )
+
+
 def render() -> None:
     documento_id_str = st.session_state.get("documento_actual_id")
     if not documento_id_str:
@@ -608,29 +1020,44 @@ def render() -> None:
 
     header.render(breadcrumbs=["Inicio", nombre, "Dashboard"])
 
-    # Título y meta
-    col_titulo, col_edit = st.columns([5, 1])
+    # Hero compacto: nombre + pill de estado inline + cluster de meta + acción metadata.
+    etiqueta_estado, color_estado = _ETIQUETA_ESTADO[documento.estado]
+    text = SMNYL_COLORS["text"]
+    muted = SMNYL_COLORS["text_muted"]
+    col_titulo, col_edit = st.columns([6, 1.2])
     with col_titulo:
         st.markdown(
             f"""
-            <h1 style="font-family: var(--font-display); margin-bottom: 0.25rem;">{nombre}</h1>
-            <p style="color: {SMNYL_COLORS["text_muted"]}; margin-bottom: 2rem;">
-                Estado: <strong>{documento.estado}</strong> ·
-                {len(documento.secciones)} secciones del template ·
+            <div style="display: flex; align-items: center; gap: 14px;
+                margin-bottom: 6px; flex-wrap: wrap;">
+                <h1 style="font-family: var(--font-display);
+                    font-size: 1.75rem; font-weight: 600;
+                    color: {text}; margin: 0; line-height: 1.15;">{nombre}</h1>
+                <span style="display: inline-block; padding: 3px 12px;
+                    border-radius: 999px; background: {color_estado}1a;
+                    color: {color_estado}; font-size: 0.72rem;
+                    font-weight: 700; letter-spacing: 0.06em;
+                    text-transform: uppercase;">{etiqueta_estado}</span>
+            </div>
+            <div style="color: {muted}; font-size: 0.85rem; margin-bottom: 1.25rem;">
+                {len(documento.secciones)} secciones ·
                 {len(documento.audit_trail)} eventos en audit trail
-            </p>
+            </div>
             """,
             unsafe_allow_html=True,
         )
     with col_edit:
-        st.markdown("<div style='height: 0.6rem;'></div>", unsafe_allow_html=True)
+        st.markdown("<div style='height: 0.25rem;'></div>", unsafe_allow_html=True)
         if st.button(
             "Editar metadata",
             use_container_width=True,
+            icon=":material/edit:",
             help="Editar nombre, ID, FAE, owner, versión y tier del modelo.",
             key=f"edit_meta_{documento.id}",
         ):
             _dialog_editar_metadata(str(documento.id))
+
+    onboarding_banner.render()
 
     _render_resumen(documento, brechas)
 
@@ -685,34 +1112,27 @@ def render() -> None:
 
     # Sección: brechas críticas priorizadas
     st.markdown("### Brechas críticas")
-    st.caption("Ordenadas por severidad. Empieza por las marcadas como Críticas.")
+    st.caption("Agrupadas por severidad. Empieza por las marcadas como Críticas.")
 
     text_color = SMNYL_COLORS["text"]
     muted_color = SMNYL_COLORS["text_muted"]
     if not brechas:
-        st.success("¡No hay brechas detectadas! El documento está listo para revisión.")
+        clicked_export = empty_state.render(
+            titulo="¡Documento listo para revisión!",
+            descripcion=(
+                "No hay brechas detectadas en las secciones obligatorias. Puedes "
+                "exportar el documento o seguir refinando contenido opcional."
+            ),
+            icono="🎉",
+            cta_label="Exportar a DOCX",
+        )
+        if clicked_export:
+            # Reusa el mismo dialog que el botón "Exportar DOCX" del header de gobernanza.
+            _dialog_exportar_docx(documento_id_str)
     else:
-        for b in brechas[:10]:
-            with st.container(border=True):
-                col_badge, col_msg = st.columns([1, 6])
-                with col_badge:
-                    gap_badge.render(b.severidad)
-                with col_msg:
-                    msg_style = f"color: {text_color}; font-weight: 500;"
-                    sug_style = f"color: {muted_color}; font-size: 0.875rem; margin-top: 4px;"
-                    st.markdown(
-                        f"<div style='{msg_style}'>{b.mensaje}</div>",
-                        unsafe_allow_html=True,
-                    )
-                    if b.sugerencia:
-                        st.markdown(
-                            f"<div style='{sug_style}'>💡 {b.sugerencia}</div>",
-                            unsafe_allow_html=True,
-                        )
-        if len(brechas) > 10:
-            st.caption(f"… y {len(brechas) - 10} brechas adicionales.")
+        _render_brechas_agrupadas(brechas, text_color, muted_color)
 
-    st.markdown("<div style='height: 2.5rem;'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='height: 2rem;'></div>", unsafe_allow_html=True)
 
     # Sección: grid de secciones
     st.markdown("### Secciones del Model Development Template")
@@ -726,55 +1146,35 @@ def render() -> None:
     for b in brechas:
         brechas_por_seccion[b.seccion_id] += 1
 
-    # Renderizar grid de 3 columnas, cada card con botones de acción
-    cols = st.columns(3)
-    for i, seccion in enumerate(documento.secciones):
-        with cols[i % 3]:
-            seccion_card.render(
-                seccion,
-                brechas_count=brechas_por_seccion.get(seccion.id, 0),
-            )
-            if seccion.completitud == "omitida":
-                if st.button(
-                    "Reactivar",
-                    key=f"reactivar_{seccion.id}",
-                    use_container_width=True,
-                    help="Vuelve la sección a 'vacía' para retomarla.",
-                ):
-                    repo_reset = DocumentoRepository()
-                    doc_reset = repo_reset.obtener(documento.id)
-                    if doc_reset is not None:
-                        seccion_reset = doc_reset.seccion_por_id(seccion.id)
-                        if seccion_reset is not None:
-                            seccion_reset.completitud = "vacia"
-                            seccion_reset.motivo_omision = None
-                            repo_reset.guardar(doc_reset)
-                            st.toast(f"Sección {seccion.numero} reactivada.", icon="↩️")
-                            st.rerun()
-            else:
-                col_int, col_omit = st.columns(2)
-                with col_int:
-                    if st.button(
-                        "Entrevistar",
-                        key=f"interview_{seccion.id}",
-                        use_container_width=True,
-                    ):
-                        st.session_state["seccion_entrevista_id"] = seccion.id
-                        st.session_state["pagina"] = "entrevista"
-                        st.rerun()
-                with col_omit:
-                    if st.button(
-                        "Omitir",
-                        key=f"omitir_{seccion.id}",
-                        use_container_width=True,
-                        help="Marcar como omitida con motivo justificado.",
-                    ):
-                        _dialog_omitir_seccion(
-                            str(documento.id),
-                            seccion.id,
-                            f"{seccion.numero} {seccion.nombre}",
-                            seccion.intencion or "",
-                        )
+    # Agrupar secciones por capítulo NYL — resuelve Miller (wall-of-28-cards).
+    # Identificar el primer capítulo con brechas críticas o secciones vacías
+    # para expandirlo por default; los demás quedan colapsados.
+    grupos = agrupar_secciones_por_capitulo(list(documento.secciones))
+    primer_cap_con_pendientes = _primer_capitulo_con_pendientes(grupos, brechas)
+
+    for cap_num, cap_nombre, secs_cap in grupos:
+        if not secs_cap:
+            continue  # capítulo sin secciones — saltar silenciosamente
+        n_completas = sum(1 for s in secs_cap if s.completitud == "completa")
+        n_omitidas = sum(1 for s in secs_cap if s.completitud == "omitida")
+        n_resueltas = n_completas + n_omitidas
+        n_total = len(secs_cap)
+        # Header del expander: "Cap N: Nombre — X de Y resueltas"
+        if n_resueltas == n_total:
+            estado_marker = "✓"
+        elif n_resueltas == 0:
+            estado_marker = "○"
+        else:
+            estado_marker = "◐"
+        header_titulo = (
+            f"{estado_marker}  Capítulo {cap_num}: {cap_nombre}  "
+            f"·  {n_resueltas} de {n_total} resueltas"
+        )
+        with st.expander(header_titulo, expanded=(cap_num == primer_cap_con_pendientes)):
+            cols = st.columns(3)
+            for i, seccion in enumerate(secs_cap):
+                with cols[i % 3]:
+                    _render_seccion_con_acciones(documento, seccion, brechas_por_seccion)
 
     st.markdown("<div style='height: 3rem;'></div>", unsafe_allow_html=True)
 

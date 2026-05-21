@@ -226,3 +226,139 @@ def test_traducir_registra_metricas_uso() -> None:
 def test_idiomas_soportados_incluye_es_y_en() -> None:
     assert "es" in IDIOMAS_SOPORTADOS
     assert "en" in IDIOMAS_SOPORTADOS
+
+
+def test_idiomas_soportados_incluye_modos_normalize_y_bilingue() -> None:
+    assert "es_normalize" in IDIOMAS_SOPORTADOS
+    assert "en_normalize" in IDIOMAS_SOPORTADOS
+    assert "bilingue" in IDIOMAS_SOPORTADOS
+
+
+def test_modo_bilingue_no_toca_documento() -> None:
+    """Modo 'bilingue' es no-op: documento sale tal cual entró."""
+    llm = FakeLLM(["nunca"])
+    doc = _doc_seed()
+    contenido_original = doc.seccion_por_id("2.1.model_uses").contenido  # type: ignore[union-attr]
+    intended_original = doc.metadata_modelo.intended_use
+
+    TraductorDocumento(llm).traducir(doc, idioma_objetivo="bilingue")
+
+    assert doc.seccion_por_id("2.1.model_uses").contenido == contenido_original  # type: ignore[union-attr]
+    assert doc.metadata_modelo.intended_use == intended_original
+    assert len(llm.llamadas) == 0
+
+
+def test_modo_es_normalize_detecta_es_y_preserva_sin_traducir() -> None:
+    """Si todo el contenido ya está en español, normalizar-ES no debe traducir."""
+    # FakeLLM devuelve "es" para cada detección (5 detectores aprox.):
+    # intended_use, use_restrictions, sección 2.1, apéndice contenido, apéndice título
+    llm = FakeLLM(["es", "es", "es", "es", "es"])
+    doc = _doc_seed()
+    contenido_original = doc.seccion_por_id("2.1.model_uses").contenido  # type: ignore[union-attr]
+
+    TraductorDocumento(llm).traducir(doc, idioma_objetivo="es_normalize")
+
+    # El contenido no debe cambiar — el detector dijo que ya estaba en es
+    assert doc.seccion_por_id("2.1.model_uses").contenido == contenido_original  # type: ignore[union-attr]
+    # Todas las llamadas fueron de detección (tarea='extraction'), ninguna de traducción
+    tareas = [tarea for tarea, _, _ in llm.llamadas]
+    assert all(t == "extraction" for t in tareas)
+
+
+def test_modo_es_normalize_traduce_secciones_en_ingles() -> None:
+    """Si una sección está en inglés, normalizar-ES la traduce a español."""
+    # Patrón de respuestas:
+    # 1. detect intended_use → "en"
+    # 2. translate intended_use → "Cálculo del VNB"
+    # 3. detect use_restrictions → "es" (ya está en español)
+    # 4. detect sección 2.1 → "es"
+    # 5. detect apéndice contenido → "es"
+    # 6. detect apéndice título → "es"
+    llm = FakeLLM(["en", "Cálculo del VNB", "es", "es", "es", "es"])
+    doc = _doc_seed()
+    doc.metadata_modelo.intended_use = "Quarterly calculation of new business value"
+
+    TraductorDocumento(llm).traducir(doc, idioma_objetivo="es_normalize")
+
+    assert doc.metadata_modelo.intended_use == "Cálculo del VNB"
+
+
+def test_modo_en_normalize_traduce_solo_secciones_en_espanol() -> None:
+    """Modo en_normalize: si una sección ya está en inglés, NO la traduce."""
+    # Patrón:
+    # 1. detect intended_use → "en" (ya en inglés)
+    # 2. detect use_restrictions → "es"
+    # 3. translate use_restrictions → "For internal reporting only."
+    # 4. detect sección 2.1 → "es"
+    # 5. translate sección 2.1 → "The model calculates VNB quarterly."
+    # 6. detect apéndice contenido → "en"
+    # 7. detect apéndice título → "en"
+    llm = FakeLLM(
+        [
+            "en",
+            "es",
+            "For internal reporting only.",
+            "es",
+            "The model calculates VNB quarterly.",
+            "en",
+            "en",
+        ]
+    )
+    doc = _doc_seed()
+    intended_original = "Quarterly NBV calculation"
+    doc.metadata_modelo.intended_use = intended_original
+
+    TraductorDocumento(llm).traducir(doc, idioma_objetivo="en_normalize")
+
+    assert doc.metadata_modelo.intended_use == intended_original  # preservado
+    assert doc.metadata_modelo.use_restrictions == "For internal reporting only."
+    seccion = doc.seccion_por_id("2.1.model_uses")
+    assert seccion is not None
+    assert seccion.contenido == "The model calculates VNB quarterly."
+
+
+def test_modo_normalize_si_detector_falla_traduce_de_todos_modos() -> None:
+    """Si el detector LLM crashea, asumimos 'mixed' → traducir (no ocultar contenido).
+
+    Patrón de respuestas: la primera (detect intended_use) lanza, sigue con resto.
+    """
+    from src.llm import LLMResponse
+
+    class FlakyDetector:
+        def __init__(self) -> None:
+            self.llamadas = 0
+
+        def chat(self, *, tarea: str, **_kwargs: object) -> LLMResponse:
+            self.llamadas += 1
+            if tarea == "extraction":
+                raise RuntimeError("detector simulado caído")
+            # Tarea 'chat' = traducción: respuesta válida
+            return LLMResponse(
+                text="(traducción)",
+                modelo_usado="claude-sonnet-4-6",
+                input_tokens=10,
+                output_tokens=5,
+                cache_read_tokens=0,
+                cache_creation_tokens=0,
+            )
+
+    doc = _doc_seed()
+    intended_original = doc.metadata_modelo.intended_use
+
+    TraductorDocumento(FlakyDetector()).traducir(  # type: ignore[arg-type]
+        doc, idioma_objetivo="en_normalize"
+    )
+
+    # Al fallar detector, asumió "mixed" → tradujo
+    assert doc.metadata_modelo.intended_use != intended_original
+    assert doc.metadata_modelo.intended_use == "(traducción)"
+
+
+def test_modo_no_soportado_levanta_value_error() -> None:
+    import pytest
+
+    llm = FakeLLM([])
+    doc = _doc_seed()
+
+    with pytest.raises(ValueError, match="no soportado"):
+        TraductorDocumento(llm).traducir(doc, idioma_objetivo="fr_normalize")  # type: ignore[arg-type]

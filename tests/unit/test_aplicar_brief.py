@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from src.core.models import Documento, MetadataModelo
 from src.core.template_catalog import construir_secciones_vacias
-from src.core.usecases.aplicar_brief import PREGUNTAS_BRIEF, AplicarBrief
+from src.core.usecases.aplicar_brief import PREGUNTAS_BRIEF, AplicarBrief, ResultadoBrief
 from tests.unit.test_interview_engine import FakeLLM
 
 
@@ -31,9 +31,12 @@ def test_aplicar_brief_genera_borrador_por_respuesta_no_vacia() -> None:
     llm = FakeLLM(["Draft 1", "Draft 2"])
     respuestas = {1: "Respuesta uno", 2: "Respuesta dos"}
 
-    aplicadas = AplicarBrief(llm).ejecutar(doc, respuestas)
+    resultado = AplicarBrief(llm).ejecutar(doc, respuestas)
 
-    assert aplicadas == 2
+    assert isinstance(resultado, ResultadoBrief)
+    assert resultado.secciones_aplicadas == 2
+    assert resultado.respuestas_recibidas == 2
+    assert resultado.errores == []
     s1 = doc.seccion_por_id(PREGUNTAS_BRIEF[0].seccion_id)
     s2 = doc.seccion_por_id(PREGUNTAS_BRIEF[1].seccion_id)
     assert s1 is not None and s1.contenido is not None
@@ -49,9 +52,10 @@ def test_respuesta_vacia_no_dispara_llm() -> None:
     llm = FakeLLM(["nunca"])
     respuestas = {1: "", 2: "   "}
 
-    aplicadas = AplicarBrief(llm).ejecutar(doc, respuestas)
+    resultado = AplicarBrief(llm).ejecutar(doc, respuestas)
 
-    assert aplicadas == 0
+    assert resultado.secciones_aplicadas == 0
+    assert resultado.respuestas_recibidas == 0
     assert len(llm.llamadas) == 0
 
 
@@ -66,9 +70,10 @@ def test_aplicar_brief_no_sobreescribe_seccion_con_contenido() -> None:
     seccion_existente.completitud = "completa"
 
     llm = FakeLLM(["draft que no debe aplicarse"])
-    aplicadas = AplicarBrief(llm).ejecutar(doc, {1: "Nueva respuesta"})
+    resultado = AplicarBrief(llm).ejecutar(doc, {1: "Nueva respuesta"})
 
-    assert aplicadas == 0
+    assert resultado.secciones_aplicadas == 0
+    assert resultado.respuestas_recibidas == 1  # se contó pero no se aplicó
     s = doc.seccion_por_id(pregunta.seccion_id)
     assert s is not None
     assert s.contenido == "Contenido previo del usuario"
@@ -96,3 +101,36 @@ def test_aplicar_brief_registra_metricas() -> None:
     AplicarBrief(llm).ejecutar(doc, respuestas)
 
     assert len(doc.metricas_uso.llamadas) == 1
+
+
+def test_aplicar_brief_propaga_errores_llm_sin_abortar() -> None:
+    """Si el LLM crashea en una pregunta, se sigue con las demás."""
+    from src.llm import LLMResponse
+
+    class FlakyLLM:
+        def __init__(self) -> None:
+            self.llamadas = 0
+
+        def chat(self, **_kwargs: object) -> LLMResponse:
+            self.llamadas += 1
+            if self.llamadas == 1:
+                raise RuntimeError("rate limit simulado")
+            return LLMResponse(
+                text="Draft OK",
+                modelo_usado="claude-haiku-4-5",
+                input_tokens=10,
+                output_tokens=5,
+                cache_read_tokens=0,
+                cache_creation_tokens=0,
+            )
+
+    doc = _doc_nuevo()
+    resultado = AplicarBrief(FlakyLLM()).ejecutar(  # type: ignore[arg-type]
+        doc, {1: "primera respuesta", 2: "segunda respuesta"}
+    )
+
+    assert resultado.respuestas_recibidas == 2
+    assert resultado.secciones_aplicadas == 1  # solo la segunda pasó
+    assert len(resultado.errores) == 1
+    assert "Pregunta 1" in resultado.errores[0]
+    assert "RuntimeError" in resultado.errores[0]

@@ -11,8 +11,8 @@ dashboard con 6+ secciones ya pre-pobladas en lugar de en blanco.
 
 from __future__ import annotations
 
-import contextlib
-from dataclasses import dataclass
+import logging
+from dataclasses import dataclass, field
 from typing import Final
 
 from anthropic.types import MessageParam, TextBlockParam
@@ -22,6 +22,27 @@ from src.core.usecases.strings_localizados import Idioma, t
 from src.llm import LLMClient
 from src.llm.pricing import construir_llamada
 from src.llm.prompts.brief_a_seccion import BRIEF_A_SECCION_SYSTEM, construir_prompt_brief
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class ResultadoBrief:
+    """Resultado de aplicar el Brief Inicial sobre un documento.
+
+    Attributes:
+        secciones_aplicadas: cantidad de secciones a las que se inyectó borrador.
+        respuestas_recibidas: cantidad de respuestas no vacías que entraron.
+        errores: lista de mensajes legibles si alguna falló por LLM.
+    """
+
+    secciones_aplicadas: int = 0
+    respuestas_recibidas: int = 0
+    errores: list[str] = field(default_factory=list)
+
+    @property
+    def hubo_errores(self) -> bool:
+        return bool(self.errores)
 
 
 @dataclass(frozen=True)
@@ -139,21 +160,27 @@ class AplicarBrief:
         respuestas: dict[int, str],
         *,
         idioma: Idioma = "es",
-    ) -> int:
-        """Genera borradores para cada respuesta no vacía y devuelve cuántas se aplicaron.
+    ) -> ResultadoBrief:
+        """Genera borradores para cada respuesta no vacía.
 
         Args:
             documento: documento donde escribir los borradores (in-place).
             respuestas: dict `{numero_pregunta: respuesta}` (1-10).
             idioma: idioma del prefijo "[Borrador — revisar]".
+
+        Returns:
+            ResultadoBrief con conteos y errores agregados durante la corrida.
         """
         prefijo = t("borrador_revisar", idioma)
         aplicadas = 0
+        recibidas = 0
+        errores: list[str] = []
 
         for pregunta in PREGUNTAS_BRIEF:
             respuesta = respuestas.get(pregunta.numero, "")
             if not respuesta or not respuesta.strip():
                 continue
+            recibidas += 1
 
             seccion = documento.seccion_por_id(pregunta.seccion_id)
             if seccion is None:
@@ -162,7 +189,7 @@ class AplicarBrief:
             if seccion.completitud not in ("vacia",):
                 continue
 
-            with contextlib.suppress(Exception):
+            try:
                 draft = self._convertir(
                     documento,
                     seccion_nombre=seccion.nombre,
@@ -170,12 +197,25 @@ class AplicarBrief:
                     pregunta=pregunta.texto,
                     respuesta=respuesta.strip(),
                 )
-                if draft:
-                    seccion.contenido = f"{prefijo}\n\n{draft.strip()}"
-                    seccion.completitud = "parcial"
-                    aplicadas += 1
+            except Exception as exc:
+                msg = (
+                    f"Pregunta {pregunta.numero} ({pregunta.seccion_id}): "
+                    f"falló la conversión LLM ({exc.__class__.__name__})"
+                )
+                logger.warning(msg, exc_info=True)
+                errores.append(msg)
+                continue
 
-        return aplicadas
+            if draft:
+                seccion.contenido = f"{prefijo}\n\n{draft.strip()}"
+                seccion.completitud = "parcial"
+                aplicadas += 1
+
+        return ResultadoBrief(
+            secciones_aplicadas=aplicadas,
+            respuestas_recibidas=recibidas,
+            errores=errores,
+        )
 
     def _convertir(
         self,

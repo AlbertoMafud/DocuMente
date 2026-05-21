@@ -362,9 +362,18 @@ def _agregar_seccion_apendices(
     for i, ap in enumerate(documento.apendices, start=1):
         titulo = (getattr(ap, "titulo", "") or "").strip() or t("apendice_singular", idioma)
         contenido_md = getattr(ap, "contenido_md", "") or ""
+        tipo_ap = getattr(ap, "tipo", "tabla")
 
         # Heading "A.N: <titulo>"
         doc.add_heading(f"A.{i}: {titulo}", level=2)
+
+        # Tipos C.1: PDF (páginas como imágenes) + formula (LaTeX → imagen).
+        if tipo_ap == "pdf":
+            _agregar_apendice_pdf(doc, ap)
+            continue
+        if tipo_ap == "formula":
+            _agregar_apendice_formula(doc, ap)
+            continue
 
         if not contenido_md.strip():
             continue
@@ -376,6 +385,78 @@ def _agregar_seccion_apendices(
                 texto_limpio = limpiar_markdown(bloque.texto, conservar_enfasis=True)
                 for p_spec in parsear_parrafos(texto_limpio):
                     _agregar_parrafo_documento(doc, p_spec)
+
+
+def _agregar_apendice_pdf(doc: DocxDocument, ap: object) -> None:
+    """Renderiza cada página del PDF como imagen y la inserta en el docx.
+
+    El PDF se carga desde Storage usando `ap.archivo_id_storage`. Si no está
+    disponible (storage no inyectado), agrega un párrafo placeholder.
+    """
+    from io import BytesIO
+    from pathlib import Path as _Path
+
+    from docx.shared import Inches
+
+    from src.docs.readers.pdf_apendice_reader import renderizar_pdf_a_paginas_png
+
+    archivo_id = getattr(ap, "archivo_id_storage", None)
+    if not archivo_id:
+        doc.add_paragraph("[Apéndice PDF: archivo no disponible para render]")
+        return
+
+    # FilesystemStorage default: data/<archivo_id>.<ext>
+    data_dir = _Path(__file__).resolve().parent.parent.parent.parent / "data"
+    posibles = list(data_dir.glob(f"{archivo_id}*"))
+    if not posibles:
+        doc.add_paragraph(f"[Apéndice PDF '{archivo_id}': archivo no encontrado en storage]")
+        return
+    pdf_path = posibles[0]
+
+    try:
+        with pdf_path.open("rb") as f:
+            paginas_png = renderizar_pdf_a_paginas_png(f, max_paginas=30)
+    except Exception as exc:
+        doc.add_paragraph(f"[Error al renderizar PDF: {exc.__class__.__name__}]")
+        return
+
+    if not paginas_png:
+        doc.add_paragraph("[PDF sin páginas renderizables]")
+        return
+
+    for png_bytes in paginas_png:
+        doc.add_picture(BytesIO(png_bytes), width=Inches(6.0))
+
+
+def _agregar_apendice_formula(doc: DocxDocument, ap: object) -> None:
+    """Renderiza el LaTeX source a PNG y lo inserta como imagen.
+
+    El source vive en `ap.latex_source`. Si el render falla, agrega un
+    párrafo con el source raw entre delimitadores para que el usuario
+    pueda editarlo manualmente.
+    """
+    from io import BytesIO
+
+    from docx.shared import Inches
+
+    from src.docs.formulas.latex_to_image import (
+        LatexRenderError,
+        renderizar_latex_a_png,
+    )
+
+    latex_source = getattr(ap, "latex_source", "") or ""
+    if not latex_source.strip():
+        doc.add_paragraph("[Apéndice fórmula: source LaTeX vacío]")
+        return
+
+    try:
+        png_bytes = renderizar_latex_a_png(latex_source)
+    except LatexRenderError as exc:
+        doc.add_paragraph(f"[Fórmula no renderizable: {exc}]")
+        doc.add_paragraph(f"Source LaTeX: ${latex_source}$")
+        return
+
+    doc.add_picture(BytesIO(png_bytes), width=Inches(4.0))
 
 
 def _agregar_tabla_documento(doc: DocxDocument, bloque: BloqueTabla) -> None:

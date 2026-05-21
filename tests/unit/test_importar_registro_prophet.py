@@ -16,18 +16,78 @@ def _excel_prophet_minimo() -> bytes:
 
     ws1 = wb.active
     ws1.title = "Descripcion_General"
-    ws1.append(["Area", "Proceso", "Encargado", "Descripcion", "Frecuencia de actualización", "Corridas", "Qué problema ataca"])
-    ws1.append(["Rentabilidad", "VNB", "Francisco Carmona", "Modelo de valor nuevo de negocio", "Trimestral", "33,34,36", "Medir rentabilidad"])
-    ws1.append(["Rentabilidad", "IRR", "Cynthia Flores", "Internal rate of return", "Trimestral", "33,34", "Medir tasa interna"])
+    ws1.append(
+        [
+            "Area",
+            "Proceso",
+            "Encargado",
+            "Descripcion",
+            "Frecuencia de actualización",
+            "Corridas",
+            "Qué problema ataca",
+        ]
+    )
+    ws1.append(
+        [
+            "Rentabilidad",
+            "VNB",
+            "Francisco Carmona",
+            "Modelo de valor nuevo de negocio",
+            "Trimestral",
+            "33,34,36",
+            "Medir rentabilidad",
+        ]
+    )
+    ws1.append(
+        [
+            "Rentabilidad",
+            "IRR",
+            "Cynthia Flores",
+            "Internal rate of return",
+            "Trimestral",
+            "33,34",
+            "Medir tasa interna",
+        ]
+    )
 
     ws2 = wb.create_sheet("Detalle Runs")
-    ws2.append(["# corrida", "Detalle", "Corrida Precedente", "Es ALM?", "Tiempo de ejecución", "Outputs Principales", "Responsable"])
+    ws2.append(
+        [
+            "# corrida",
+            "Detalle",
+            "Corrida Precedente",
+            "Es ALM?",
+            "Tiempo de ejecución",
+            "Outputs Principales",
+            "Responsable",
+        ]
+    )
     ws2.append(["33", "IL UDI y USD", "", "No", "45 min", "VNB, Profit", "Carmona"])
     ws2.append(["34", "GMM Individual", "33", "Sí", "90 min", "IRR", "Carmona"])
 
     ws3 = wb.create_sheet("Variables criticas")
-    ws3.append(["Corrida", "Nombre", "Descripción", "Fórmula", "Frecuencia de actualización", "Responsable de la info", "Variables dependientes"])
-    ws3.append(["33", "PROF_SOLVM", "Solvency margin profit", "PREM_INC - DEATH_OUTGO", "Trimestral", "Carmona", "PREM_INC,DEATH_OUTGO"])
+    ws3.append(
+        [
+            "Corrida",
+            "Nombre",
+            "Descripción",
+            "Fórmula",
+            "Frecuencia de actualización",
+            "Responsable de la info",
+            "Variables dependientes",
+        ]
+    )
+    ws3.append(
+        [
+            "33",
+            "PROF_SOLVM",
+            "Solvency margin profit",
+            "PREM_INC - DEATH_OUTGO",
+            "Trimestral",
+            "Carmona",
+            "PREM_INC,DEATH_OUTGO",
+        ]
+    )
 
     ws4 = wb.create_sheet("Conocimiento_Tecnico")
     ws4.append(["Persona", "Ejecutar corridas base", "Modificación de código"])

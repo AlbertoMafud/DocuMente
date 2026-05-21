@@ -8,9 +8,9 @@ from src.core.models import Severidad
 from src.ui.theme import SMNYL_COLORS
 
 _COLORS_POR_SEVERIDAD: dict[Severidad, tuple[str, str, str]] = {
-    "alta": (SMNYL_COLORS["danger"], "#fdf2f6", "Crítica"),
-    "media": (SMNYL_COLORS["warning"], "#fdf4ee", "Atención"),
-    "baja": (SMNYL_COLORS["info"], "#eef6fb", "Sugerencia"),
+    "alta": (SMNYL_COLORS["danger"], SMNYL_COLORS["danger_soft"], "Crítica"),
+    "media": (SMNYL_COLORS["warning_dark"], SMNYL_COLORS["warning_soft"], "Atención"),
+    "baja": (SMNYL_COLORS["info_dark"], SMNYL_COLORS["info_soft"], "Sugerencia"),
 }
 
 

@@ -31,23 +31,32 @@ Los siguientes seis principios se aplican desde la primera línea de código:
 
 > Esta sección se actualiza con cada release del MVP.
 
-| Aspecto | Estado actual (Fases 0–4 completas, sesión 7) |
+**⚠️ S14 (2026-05-20):** la arquitectura pasó de Streamlit monolítico a **3 servicios coexistentes** (Streamlit legacy + FastAPI REST + Next.js frontend). El dominio Python no cambió; se agregaron las dos capas nuevas. Ver §3 filas 50-58 para detalles.
+
+| Aspecto | Estado actual (S14 — Fases 0-D + Rewrite Next.js completo) |
 |---|---|
-| Lenguaje | Python 3.11+ |
-| UI | Streamlit (local, single-user) — router con 7 pantallas (home, importar, onboarding, dashboard, entrevista, vista_previa, auditoria) |
+| Lenguaje backend | Python 3.11+ |
+| Lenguaje frontend | TypeScript 5 (Node.js 20+ requerido para build) |
+| **Arquitectura** | **3 servicios:** Streamlit legacy (`:8052`) + FastAPI REST (`:8001`) + Next.js 14 (`:3000`). Los 3 consumen el mismo dominio Python y la misma BD |
+| UI legacy (Streamlit) | Router con 13 pantallas. Sigue funcional, mismo theme SMNYL |
+| **API REST (NUEVA)** | **FastAPI 0.115 + uvicorn**. 46 endpoints en 11 routers. OpenAPI 3.1 auto-generado en `/docs`. CORS abierto en dev — restringir en prod. Auth bearer token reutiliza `DOCUMENTE_GATE_PASSWORD` (placeholder hasta Cognito A.1.c) |
+| **UI premium (NUEVA)** | **Next.js 14 App Router + Tailwind + shadcn/ui + TanStack Query**. 17 rutas con paridad funcional total vs Streamlit. Sidebar fijo, transiciones premium, theme SMNYL portado |
 | LLM | Anthropic API directo vía `AnthropicClient` con estrategia tiered: Sonnet 4.6 (chat), Opus 4.7 (drafting), Haiku 4.5 (extraction). Prompt caching agresivo en contexto fijo (~12K tokens) |
 | LLM abstraction | `LLMClient` Protocol — listo para swap a Bedrock sin tocar lógica de negocio |
-| Persistencia | SQLite vía SQLAlchemy + Repository pattern (Documentos + Estados de entrevista). URL configurable por `DATABASE_URL` |
+| Persistencia | SQLite vía SQLAlchemy + Repository pattern (Documentos + Estados de entrevista + Versiones). URL configurable por `DATABASE_URL` |
 | Storage de archivos | `FilesystemStorage` implementa interfaz `Storage` (ya lista para swap a S3) |
 | Configuración | `pydantic-settings` lee `.env` de forma tipada (`src/config.py`) |
-| Auth | Ninguno (single-user, `USER_ID="default"` ya en modelo de datos) |
+| Auth | Bearer token compartido (`DOCUMENTE_GATE_PASSWORD`) reutilizado por Streamlit gate, Next.js (vía `NEXT_PUBLIC_API_TOKEN`) y FastAPI (vía header `Authorization: Bearer`). Placeholder hasta Cognito real (A.1.c) |
 | Logs | (pendiente) `structlog` a stdout |
-| Despliegue | `streamlit run app.py` en local |
+| Despliegue | Local: 3 procesos (uvicorn API + streamlit + next dev). EC2 pendiente — ver §4 actualizado |
 | Containerización | Ninguna |
-| Generación DOCX | `DocxWriter` con `docxtpl` + plantilla maestra editada manualmente; Subdoc + RichText con bold/italic reales; tablas nativas con `Table Grid` y font adaptable |
+| Generación DOCX | `DocxWriter` con `docxtpl` + plantilla maestra; Subdoc + RichText con bold/italic reales; tablas nativas con `Table Grid` y font adaptable. Endpoint `/documentos/{id}/exportar` devuelve blob para descarga |
 | Multilenguaje | Toggle ES/EN en export. `TraductorDocumento` con prompt para inglés corporativo americano (efímero, no se persiste) |
-| State machine | `DocumentStateMachine` con 5 estados oficiales MRM + sign-offs Reviewer/FAE como audit events inmutables |
-| Tests | 174 tests pasan; ruff clean; mypy strict |
+| State machine | `DocumentStateMachine` con 5 estados oficiales MRM + sign-offs Reviewer/FAE como audit events inmutables. Endpoints `/estado` y `/signoff` |
+| Versiones | Snapshots inmutables `Version` + `VersionRepository`. Idempotencia por hash de contenido. Endpoints `/versiones` |
+| Apéndices universales | Tabla (Excel/CSV multi-hoja), PDF (página-as-imagen), Fórmula LaTeX (PNG). Endpoints `/apendices/{tabla,pdf,formula}` |
+| Tests backend | **457 pasan** (429 unit + 28 integration smoke API); ruff clean; mypy strict |
+| Tests frontend | TypeScript `--noEmit` clean; ESLint clean. E2E pendiente (Playwright candidate) |
 
 ---
 
@@ -88,6 +97,23 @@ Los siguientes seis principios se aplican desde la primera línea de código:
 | 29 | Toggle de idioma en UI | Modal `st.dialog` en dashboard con radio Español / English; pasa `idioma_objetivo` al use case | Sin cambios | Nulo | ✅ Sesión 7 |
 | 30 | Editor de metadata del modelo | Modal `st.dialog` para editar 8 campos clave; cambios registrados en audit como `metadata_actualizada` con delta exacto | Sin cambios | Nulo | ✅ Sesión 7 |
 | 31 | Apéndices con tabla nativa | `markdown_blocks` separa contenido_md en `BloqueProsa` y `BloqueTabla`. Las tablas se incrustan con `subdoc.add_table()` y font 7-10pt adaptable | Sin cambios | Nulo | ✅ Sesión 7 |
+| 32 | Crear documento desde cero | Use case `CrearDocumentoEnBlanco` + función `construir_secciones_vacias()` en `template_catalog`. UI con form de 2 campos | Sin cambios | Nulo | ✅ Sesión 9 |
+| 33 | Módulo Prophet — importar registro | `ImportarRegistroProphet` + `DetectarModelosProphet` con openpyxl. `DocxWriterProphet` con plantilla dedicada `prophet_model_doc_smnyl.docx` | Sin cambios al código. Plantilla Prophet pendiente de pulido para demo MA (D.1.a) | Bajo | ✅ Sesión 11/12 |
+| 34 | Archivado + papelera + purga | Campos `archivado`, `en_papelera`, `archivado_en` aditivos en `Documento`. Use case `ArchivarDocumento`. Job `purgar_papelera_expirada` (30 días) idempotente | Sin cambios. En EC2 mover el job a cron del SO (hoy corre 1x por sesión Streamlit) | Bajo | ✅ Sesión 13 |
+| 35 | Auth gate (password compartido) | Componente `auth_gate.proteger_app()` lee `DOCUMENTE_GATE_PASSWORD`. Mismo valor lo usa FastAPI vía bearer token | Reemplazar con Cognito real (A.1.c) en migración a EC2 multi-user | Medio (1-2 días) | ✅ Sesión 13 |
+| 36 | StructureRealigner | LLM-based: si la cobertura del catálogo es baja, reestructura el ancla para mapear secciones | Sin cambios; respeta el Protocol `LLMClient` | Nulo | ✅ Sesión 13 |
+| 37 | DocumentPolisher | LLM revisa el documento completo y reporta inconsistencias entre secciones. NO modifica nada — solo sugiere | Sin cambios | Nulo | ✅ Sesión 13 |
+| 38 | Apéndices universales (PDF + LaTeX) | `AdjuntarPdfApendice` usa PyMuPDF para contar páginas, embebe páginas como imagen al exportar. `AdjuntarFormulaApendice` renderea LaTeX vía matplotlib → PNG | Sin cambios. PyMuPDF y matplotlib instalados como deps Python | Bajo | ✅ Sesión 13 |
+| 39 | Editor inline MRM | Pantalla `editar_seccion_mrm.py` con textarea + preview en vivo. Heurística de completitud: <200 chars = parcial, ≥200 = completa | Sin cambios | Nulo | ✅ Sesión 13 |
+| 40 | Versionado (snapshots inmutables) | Nuevo modelo `Version` + `VersionRepository`. Use case `CrearVersion` con idempotencia por hash de contenido. Toggle en export | Sin cambios. Schema migration aditivo: nueva tabla `versions` | Bajo | ✅ Sesión 13 |
+| 41 | Breadcrumb clickeable | Componente `header.py` refinado con espaciado clickeable y home navegable | Sin cambios | Nulo | ✅ Sesión 13 |
+| 42 | Token system `*_dark` + `*_soft` | Theme extendido con `success_dark`, `warning_dark`, `info_dark`, `*_soft` para cumplir WCAG 2.1 AA en componentes con texto sobre fondos coloreados | Sin cambios — solo CSS | Nulo | ✅ Sesión 14 |
+| 43 | Top 10 Quick Wins UX (Streamlit) | Stepper visual, hero "Continúa", empty states con CTA, dashboard por capítulo NYL accordion, banner Deshacer, balloons al export, "Guardado hace X", Material Symbols, microinteracciones globales, brechas accordion por severidad | Sin cambios | Nulo | ✅ Sesión 14 |
+| **44** | **API REST FastAPI** | `src/api/`: 11 routers (documentos, secciones, brechas, exportar, entrevista, apéndices, versiones, prophet, templates, importar, health). DTOs Pydantic separados del dominio. Auth bearer reutiliza `DOCUMENTE_GATE_PASSWORD`. CORS abierto en dev | **Reemplazar CORS `*` por dominio real del frontend** (variable de entorno `CORS_ORIGINS`). Auth bearer → Cognito real (A.1.c). systemd unit `documente-api.service`. Mismo proceso Python + uvicorn | **Medio** (CORS + auth crítica) | ✅ S14 — **NUEVO** |
+| **45** | **Frontend Next.js premium** | `frontend/`: Next.js 14 + TypeScript + Tailwind + shadcn/ui + TanStack Query. 17 rutas, sidebar fijo, paridad funcional total con Streamlit | **Opción A:** servir build estático con nginx en el mismo EC2 + reverse proxy `/api → :8001`. **Opción B:** S3 + CloudFront (separado del backend). Decidir con Vidal | Medio | ✅ S14 — **NUEVO** |
+| **46** | **Tipos TS espejo de DTOs** | `frontend/src/lib/api/types.ts` mantenido manualmente. Sincroniza con `src/api/schemas/` (Pydantic) | Migrar a auto-generación con `openapi-typescript` desde `/openapi.json`. Nice-to-have, no bloqueante | Bajo | ⏸️ S14 — pendiente F5 |
+| **47** | **Build production frontend** | `npm run build` (no validado aún en CI ni en EC2) | Validar build en una máquina limpia con Node 20+. Considerar Docker multi-stage para reducir surface area | Bajo | ⏸️ S14 — pendiente pre-deploy |
+| **48** | **Streamlit (legacy) coexistente** | Sigue corriendo en `:8052` contra la misma BD. Útil durante la transición | Decidir fecha de sunset post-merge a main. Mientras: 2 systemd units paralelas en EC2 | Bajo | ✅ S14 |
 | — | *(filas se agregan aquí conforme avance el MVP)* | | | | |
 
 **Convención de filas:**
@@ -269,11 +295,23 @@ AWS_REGION=us-east-1
 AUTH_BACKEND=cognito                              # 'none' (MVP), 'cognito', o 'streamlit-authenticator'
 COGNITO_USER_POOL_ID=us-east-1_XXXXX
 COGNITO_CLIENT_ID=...
+DOCUMENTE_GATE_PASSWORD=<aleatorio-fuerte>        # Bearer token compartido API + Streamlit hasta Cognito real
+
+# === API REST (S14) ===
+CORS_ORIGINS=https://documente.smnyl.mx           # Coma-separado en multi-origen. NUNCA "*" en prod
 
 # === Configuración general ===
 USER_ID_DEFAULT=default                           # Solo se usa si AUTH_BACKEND=none
 LOG_LEVEL=INFO
 EXPORTS_PATH=/tmp/documente-exports               # Solo si STORAGE_BACKEND=filesystem
+```
+
+**Frontend Next.js — variables build-time (en `/opt/documente/frontend/.env.production`):**
+
+```env
+# Estas son public — se compilan en el bundle JS del browser
+NEXT_PUBLIC_API_URL=https://documente.smnyl.mx/api        # O subdominio: https://api.documente...
+NEXT_PUBLIC_API_TOKEN=<mismo-DOCUMENTE_GATE_PASSWORD>     # Hasta Cognito real
 ```
 
 ### 8.4 Comandos de instalación (paso a paso)
@@ -282,8 +320,11 @@ EXPORTS_PATH=/tmp/documente-exports               # Solo si STORAGE_BACKEND=file
 # Conectar
 ssh -i smnyl-key.pem ec2-user@documente.smnyl.local
 
-# Setup base
+# Setup base (Python + Node.js + nginx)
 sudo yum install -y python3.11 git nginx
+# Node.js 20+ desde NodeSource
+curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
+sudo yum install -y nodejs
 sudo useradd -m documente
 sudo mkdir -p /opt/documente /etc/documente
 
@@ -291,7 +332,7 @@ sudo mkdir -p /opt/documente /etc/documente
 sudo -u documente git clone <github-url> /opt/documente
 cd /opt/documente
 
-# Entorno virtual
+# Entorno virtual Python
 sudo -u documente python3.11 -m venv .venv
 sudo -u documente .venv/bin/pip install --upgrade pip
 sudo -u documente .venv/bin/pip install -e ".[dev]"
@@ -304,22 +345,55 @@ sudo chmod 600 /etc/documente/.env
 # Migración de schema (PostgreSQL)
 sudo -u documente .venv/bin/python -m src.storage.init_schema
 
-# Servicio systemd (ver §8.5)
-sudo cp deploy/documente.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable documente
-sudo systemctl start documente
+# Build del frontend Next.js
+cd /opt/documente/frontend
+sudo -u documente npm ci
+# .env.production con NEXT_PUBLIC_*
+sudo -u documente cp /etc/documente/frontend.env.production .env.production
+sudo -u documente npm run build
 
-# nginx delante (ver §8.6)
+# Servicios systemd (ver §8.5 — son 2: API + Streamlit legacy)
+sudo cp deploy/documente-api.service /etc/systemd/system/
+sudo cp deploy/documente-streamlit.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable documente-api documente-streamlit
+sudo systemctl start documente-api documente-streamlit
+
+# nginx delante (sirve Next.js + proxy /api) — ver §8.6
 sudo cp deploy/documente.nginx.conf /etc/nginx/conf.d/documente.conf
 sudo systemctl reload nginx
 ```
 
-### 8.5 Servicio systemd (`/etc/systemd/system/documente.service`)
+### 8.5 Servicios systemd (S14 — 2 servicios)
+
+**`/etc/systemd/system/documente-api.service`** (FastAPI):
 
 ```ini
 [Unit]
-Description=DocuMente Streamlit App
+Description=DocuMente API REST (FastAPI)
+After=network.target
+
+[Service]
+Type=simple
+User=documente
+WorkingDirectory=/opt/documente
+EnvironmentFile=/etc/documente/.env
+ExecStart=/opt/documente/.venv/bin/python -m uvicorn src.api.main:app \
+    --host 127.0.0.1 \
+    --port 8001 \
+    --workers 2
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+**`/etc/systemd/system/documente-streamlit.service`** (legacy, coexiste durante transición):
+
+```ini
+[Unit]
+Description=DocuMente Streamlit (legacy)
 After=network.target
 
 [Service]
@@ -338,7 +412,9 @@ RestartSec=5
 WantedBy=multi-user.target
 ```
 
-### 8.6 nginx delante (HTTPS)
+> El frontend Next.js se sirve **estáticamente desde `frontend/.next/`** vía nginx — no requiere systemd unit propia. Si en producción prefieres `npm start` (Next.js server) en lugar de estático, agrega una tercera unit `documente-frontend.service`.
+
+### 8.6 nginx delante (HTTPS + Next.js + proxy API)
 
 ```nginx
 server {
@@ -348,16 +424,39 @@ server {
     ssl_certificate /etc/ssl/smnyl/cert.pem;
     ssl_certificate_key /etc/ssl/smnyl/key.pem;
 
-    location / {
-        proxy_pass http://127.0.0.1:8501;
+    # Frontend Next.js (build estático)
+    root /opt/documente/frontend/.next;
+    index index.html;
+
+    # API REST
+    location /api/ {
+        # Quita el prefijo /api antes de pasar al backend
+        rewrite ^/api/(.*)$ /$1 break;
+        proxy_pass http://127.0.0.1:8001;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_read_timeout 300;
+    }
+
+    # Streamlit legacy (durante transición)
+    location /legacy/ {
+        proxy_pass http://127.0.0.1:8501/;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
         proxy_read_timeout 86400;
     }
+
+    # Next.js fallback (catch-all para client-side routing)
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
 }
 ```
+
+> **Alternativa más simple** si quieres separar dominios: `documente.smnyl.mx` para Next.js + `api.documente.smnyl.mx` para FastAPI + `legacy.documente.smnyl.mx` para Streamlit. Esto evita el `rewrite` y simplifica CORS.
 
 ### 8.7 Subsecuentes deploys (cuando se mergea código nuevo)
 

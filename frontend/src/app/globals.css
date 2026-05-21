@@ -1,0 +1,86 @@
+/**
+ * Estilos globales SMNYL + shadcn/ui base.
+ *
+ * Los tokens HSL viven aquí como CSS variables porque shadcn/ui los lee así.
+ * Los HEX raw equivalentes están en tailwind.config.ts (`colors.smnyl.*`).
+ * Ambos deben mantenerse sincronizados — la fuente canónica es
+ * docs/BRAND_GUIDELINES.md.
+ */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Conversión SMNYL hex → HSL para shadcn semantics */
+    --background: 0 0% 100%;              /* #ffffff */
+    --foreground: 199 78% 18%;            /* #0a3c53 Steel */
+
+    --card: 0 0% 100%;
+    --card-foreground: 199 78% 18%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 199 78% 18%;
+
+    --primary: 202 100% 38%;              /* #0079c2 New York Life Blue */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 210 11% 96%;             /* #f4f5f6 Quartz light */
+    --secondary-foreground: 199 78% 18%;
+
+    --muted: 210 11% 96%;
+    --muted-foreground: 0 0% 34%;         /* #565656 Iron */
+
+    --accent: 200 47% 80%;                /* #b2d4e4 Light Rain */
+    --accent-foreground: 199 78% 18%;
+
+    --destructive: 326 22% 37%;           /* #754a62 Dark Rose */
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 210 4% 75%;                 /* #bdc1c2 Quartz */
+    --input: 210 4% 75%;
+    --ring: 202 100% 38%;                 /* match primary */
+
+    --radius: 0.5rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  body {
+    @apply bg-background text-foreground font-body;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display;
+    letter-spacing: -0.015em;
+  }
+  /* Heading hierarchy alineada con el redesign premium del dashboard */
+  h1 { @apply text-3xl font-semibold leading-tight; }
+  h2 { @apply text-2xl font-semibold leading-tight; }
+  h3 { @apply text-lg font-semibold leading-snug; }
+}
+
+@layer components {
+  /* Status pill — usado para badges de estado MRM (DRAFT, IN_REVIEW, …) */
+  .smnyl-pill {
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5
+           text-[0.68rem] font-bold uppercase tracking-wider;
+  }
+  /* Card hover lift — replica el patrón premium T1 del dashboard */
+  .smnyl-card-hover {
+    @apply transition-all duration-200 ease-out
+           hover:shadow-smnyl-md hover:border-smnyl-accent-soft;
+  }
+}
+
+@layer utilities {
+  .text-balance { text-wrap: balance; }
+  .text-pretty { text-wrap: pretty; }
+}

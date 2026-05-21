@@ -25,6 +25,7 @@ from src.core.models.seccion import Seccion
 
 TipoDocumento = Literal["model_development", "prophet"]
 EstadoDocumento = Literal["draft", "in_review", "approved", "published", "retired"]
+EstadoVisibilidad = Literal["activo", "archivado", "papelera"]
 TierRiesgo = Literal[
     "low",
     "medium_minus",
@@ -97,6 +98,21 @@ class Documento(BaseModel):
             "backward-compatibility con documentos persistidos previos."
         ),
     )
+    # Estado de visibilidad — independiente del ciclo MRM `estado`. Un doc
+    # puede estar `approved` + `archivado` simultáneamente (quedó histórico).
+    # Campos aditivos con default — preservan backward-compat con docs persistidos.
+    archivado: bool = Field(
+        default=False,
+        description="True si el doc está oculto de la vista principal de home.",
+    )
+    archivado_en: datetime | None = Field(
+        default=None,
+        description="Timestamp del último cambio de visibilidad (archivado o papelera).",
+    )
+    en_papelera: bool = Field(
+        default=False,
+        description="True si se movió a papelera. Se purga tras 30 días si no se restaura.",
+    )
 
     def seccion_por_id(self, seccion_id: str) -> Seccion | None:
         """Devuelve la sección por su ID o None."""
@@ -116,6 +132,20 @@ class Documento(BaseModel):
         return completas / len(oblig)
 
     @property
+    def cobertura_catalogo(self) -> float:
+        """Porcentaje de secciones del template con contenido detectado (0.0 a 1.0).
+
+        Diferente de `porcentaje_completitud` (que solo cuenta secciones obligatorias
+        en estado 'completa'). Esta métrica cuenta TODAS las secciones que tengan
+        cualquier contenido — útil para detectar si una importación poblo bien la
+        estructura del template, independiente de la severidad MRM.
+        """
+        if not self.secciones:
+            return 0.0
+        con_contenido = sum(1 for s in self.secciones if s.contenido and s.contenido.strip())
+        return con_contenido / len(self.secciones)
+
+    @property
     def porcentaje_resuelto(self) -> float:
         """Porcentaje de secciones obligatorias resueltas (completa + omitida).
 
@@ -133,3 +163,31 @@ class Documento(BaseModel):
         """Agrega un evento al audit_trail y actualiza `actualizado_en`."""
         self.audit_trail.append(evento)
         self.actualizado_en = datetime.now(UTC)
+
+    def ultimo_guardado_seccion(self, seccion_id: str) -> datetime | None:
+        """Timestamp del último evento `seccion_editada` para esta sección.
+
+        Devuelve `None` si la sección nunca se editó. La fuente de verdad
+        es el audit_trail, no un campo mutable en `Seccion` — preserva
+        trazabilidad (MRM §3.5) sin agregar estado redundante al modelo.
+        """
+        timestamps = [
+            e.timestamp
+            for e in self.audit_trail
+            if e.tipo == "seccion_editada" and e.seccion_id == seccion_id
+        ]
+        return max(timestamps) if timestamps else None
+
+    @property
+    def visibilidad(self) -> EstadoVisibilidad:
+        """Estado de visibilidad derivado.
+
+        - `papelera` si `en_papelera` es True (tiene precedencia).
+        - `archivado` si `archivado` es True.
+        - `activo` en cualquier otro caso.
+        """
+        if self.en_papelera:
+            return "papelera"
+        if self.archivado:
+            return "archivado"
+        return "activo"

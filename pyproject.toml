@@ -11,8 +11,14 @@ dependencies = [
     "streamlit>=1.36.0",
     "streamlit-extras>=0.4.7",
 
+    # API REST — Fase 1 del rewrite premium (Next.js frontend irá contra esto)
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.30.0",
+    "python-multipart>=0.0.7",  # uploads multipart/form-data
+
     # LLM
-    "anthropic>=0.40.0",
+    # >=0.50 requerido para parámetro `thinking`. En EC2: `pip install -e ".[dev]"` post-pull.
+    "anthropic>=0.50.0",
 
     # Documentos
     "python-docx>=1.1.2",
@@ -20,6 +26,10 @@ dependencies = [
     "Jinja2>=3.1.4",
     "pypdf>=4.3.0",
     "openpyxl>=3.1.0",
+    # PDF como apéndice — render de páginas a imagen embebida. Sin deps SO.
+    "PyMuPDF>=1.23.0",
+    # Fórmulas matemáticas (LaTeX) renderizadas como imagen en docx.
+    "matplotlib>=3.7.0",
 
     # Datos y validación
     "pydantic>=2.7.0",

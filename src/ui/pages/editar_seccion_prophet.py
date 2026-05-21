@@ -15,7 +15,7 @@ import streamlit as st
 from src.core.models import EventoAuditoria
 from src.core.template_catalog_prophet import SeccionCatalogoProphet, por_id_prophet
 from src.storage.repositories import DocumentoRepository
-from src.ui.components import header
+from src.ui.components import continue_hero, header
 from src.ui.theme import SMNYL_COLORS
 
 
@@ -51,11 +51,19 @@ def render() -> None:
 
     header.render(breadcrumbs=["Inicio", doc.metadata_modelo.nombre_modelo, seccion.nombre])
 
+    muted = SMNYL_COLORS["text_muted"]
+    ultimo = doc.ultimo_guardado_seccion(seccion_id)
+    indicador_guardado = ""
+    if ultimo is not None:
+        indicador_guardado = (
+            f"<span style='color: {muted}; font-size: 0.8rem; font-style: italic; "
+            f"margin-left: 0.75rem;'>· Guardado {continue_hero.formato_relativo(ultimo)}</span>"
+        )
     st.markdown(
         f"""<h1 style="font-family: var(--font-display); color: {SMNYL_COLORS["text"]}; margin-bottom: 0.25rem;">
-            {seccion.nombre}
+            {seccion.nombre}{indicador_guardado}
         </h1>
-        <p style="color: {SMNYL_COLORS["text_muted"]}; margin-bottom: 1.5rem;">{cat.intencion}</p>""",
+        <p style="color: {muted}; margin-bottom: 1.5rem;">{cat.intencion}</p>""",
         unsafe_allow_html=True,
     )
 

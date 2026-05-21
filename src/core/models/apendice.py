@@ -17,7 +17,7 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 
-TipoApendice = Literal["tabla", "diagrama", "otro"]
+TipoApendice = Literal["tabla", "diagrama", "pdf", "formula", "otro"]
 
 
 class Apendice(BaseModel):
@@ -32,11 +32,18 @@ class Apendice(BaseModel):
     """Ej. 'Tabla de mortalidad SOA 2017'."""
     tipo: TipoApendice = "tabla"
     contenido_md: str = ""
-    """Contenido del apéndice en markdown (para vista previa y DOCX)."""
+    """Contenido del apéndice en markdown (para vista previa y DOCX).
+
+    Para `tipo='pdf'`: vacío — el contenido visual son las páginas renderizadas
+    cargadas desde `archivo_id_storage` al exportar.
+    Para `tipo='formula'`: vacío — el source LaTeX vive en `latex_source`.
+    """
     archivo_id_storage: str | None = None
-    """ID en Storage del archivo original (.xlsx, .csv) si fue cargado."""
+    """ID en Storage del archivo original (.xlsx, .csv, .pdf) si fue cargado."""
     nombre_archivo_original: str = ""
     """Nombre del archivo original cargado por el usuario."""
+    latex_source: str = ""
+    """Source LaTeX para `tipo='formula'`. Vacío para otros tipos. (C.1)"""
     creado_en: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     @property

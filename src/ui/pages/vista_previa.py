@@ -20,26 +20,40 @@ from src.ui.theme import SMNYL_COLORS
 
 
 def _render_seccion(idx: int, seccion: object) -> None:
-    """Renderiza una sección con su contenido o placeholder."""
-    # type: ignore  — accedemos por atributos
+    """Renderiza una sección con su contenido o placeholder + botón de edición inline."""
     titulo = f"{seccion.numero} {seccion.nombre}"  # type: ignore[attr-defined]
     text_color = SMNYL_COLORS["text"]
     muted = SMNYL_COLORS["text_muted"]
 
-    st.markdown(
-        f"<h2 id='sec-{idx}' style='font-family: var(--font-display); "
-        f"color: {text_color}; margin-top: 2.5rem; "
-        f"border-bottom: 1px solid {SMNYL_COLORS['border']}; "
-        f"padding-bottom: 0.5rem;'>{titulo}</h2>",
-        unsafe_allow_html=True,
-    )
+    col_titulo, col_edit = st.columns([6, 1])
+    with col_titulo:
+        st.markdown(
+            f"<h2 id='sec-{idx}' style='font-family: var(--font-display); "
+            f"color: {text_color}; margin-top: 2.5rem; "
+            f"border-bottom: 1px solid {SMNYL_COLORS['border']}; "
+            f"padding-bottom: 0.5rem;'>{titulo}</h2>",
+            unsafe_allow_html=True,
+        )
+    with col_edit:
+        st.markdown("<div style='height: 2.5rem;'></div>", unsafe_allow_html=True)
+        # Solo MRM tiene editor inline (tipo de catálogo "model_development").
+        # Prophet usa su propio editor especializado desde dashboard.
+        if st.button(
+            "Editar",
+            key=f"edit_inline_{seccion.id}",  # type: ignore[attr-defined]
+            icon=":material/edit:",
+            help="Abre el editor inline en una pantalla nueva con preview en vivo.",
+            use_container_width=True,
+        ):
+            st.session_state["mrm_seccion_id"] = seccion.id  # type: ignore[attr-defined]
+            st.session_state["pagina"] = "editar_seccion_mrm"
+            st.rerun()
 
     if seccion.contenido:  # type: ignore[attr-defined]
         st.markdown(seccion.contenido)  # type: ignore[attr-defined]
     else:
-        # Placeholder visual para secciones vacías
-        bg = "#fdf6e3"  # tono cálido suave
-        border = SMNYL_COLORS["warning"]
+        bg = SMNYL_COLORS["warning_soft"]
+        border = SMNYL_COLORS["warning_dark"]  # acento más sólido y consistente con tokens AA
         oblig = "obligatoria" if seccion.obligatoria else "opcional"  # type: ignore[attr-defined]
         st.markdown(
             f"""
@@ -47,7 +61,7 @@ def _render_seccion(idx: int, seccion: object) -> None:
                 padding: 12px 16px; border-radius: 4px; margin: 8px 0;'>
                 <div style='color: {muted}; font-size: 0.875rem;'>
                     <em>Sección {oblig} pendiente.</em>
-                    Contenido pendiente — iniciar entrevista para completarla.
+                    Click <strong>Editar</strong> para llenarla manualmente, o usa la entrevista desde el dashboard.
                 </div>
             </div>
             """,

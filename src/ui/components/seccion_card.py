@@ -7,17 +7,19 @@ import streamlit as st
 from src.core.models import Seccion
 from src.ui.theme import SMNYL_COLORS
 
-_COLORS_POR_COMPLETITUD = {
-    "vacia": (SMNYL_COLORS["danger"], "Vacía"),
-    "parcial": (SMNYL_COLORS["warning"], "Parcial"),
-    "completa": (SMNYL_COLORS["success"], "Completa"),
-    "omitida": (SMNYL_COLORS["text_muted"], "Omitida"),
+# (color_dot, color_label, label)
+# El dot es UI component (3:1 OK); el label es texto y necesita AA (4.5:1).
+_COLORS_POR_COMPLETITUD: dict[str, tuple[str, str, str]] = {
+    "vacia": (SMNYL_COLORS["danger"], SMNYL_COLORS["danger"], "Vacía"),
+    "parcial": (SMNYL_COLORS["warning"], SMNYL_COLORS["warning_dark"], "Parcial"),
+    "completa": (SMNYL_COLORS["success"], SMNYL_COLORS["success_dark"], "Completa"),
+    "omitida": (SMNYL_COLORS["text_muted"], SMNYL_COLORS["text_muted"], "Omitida"),
 }
 
 
 def render(seccion: Seccion, *, brechas_count: int = 0) -> None:
     """Renderiza una card visual con el estado de la sección."""
-    color, label = _COLORS_POR_COMPLETITUD[seccion.completitud]
+    color_dot, color_label, label = _COLORS_POR_COMPLETITUD[seccion.completitud]
     obligatoria_marker = (
         f"<span style='color: {SMNYL_COLORS['text_muted']}; font-size: 0.75rem;'>obligatoria</span>"
         if seccion.obligatoria
@@ -54,8 +56,8 @@ def render(seccion: Seccion, *, brechas_count: int = 0) -> None:
             <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
                 <span style="
                     width: 10px; height: 10px; border-radius: 50%;
-                    background: {color}; display: inline-block;
-                "></span>
+                    background: {color_dot}; display: inline-block;
+                " aria-label="{label}"></span>
                 <span style="
                     color: {SMNYL_COLORS["text_muted"]};
                     font-size: 0.875rem;
@@ -68,7 +70,7 @@ def render(seccion: Seccion, *, brechas_count: int = 0) -> None:
             <div style="display: flex; gap: 12px; align-items: center;
                 margin-top: 8px; padding-top: 8px;
                 border-top: 1px solid {SMNYL_COLORS["border"]};">
-                <span style="color: {color}; font-size: 0.75rem; font-weight: 600;">{label}</span>
+                <span style="color: {color_label}; font-size: 0.75rem; font-weight: 600;">{label}</span>
                 {obligatoria_marker}
                 <span style="color: {SMNYL_COLORS["text_muted"]}; font-size: 0.75rem;">
                     {chars_str}

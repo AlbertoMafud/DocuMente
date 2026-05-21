@@ -2,17 +2,30 @@
 
 Aísla la lógica de negocio de SQLAlchemy. Migrar de SQLite a PostgreSQL
 implica solo cambiar `DATABASE_URL` en `.env` — estas clases no cambian.
+
+Visibilidad (Fase A.5):
+- `listar_por_usuario` filtra `archivado=False` y `en_papelera=False` por
+  default. Use `incluir_archivados=True` o `solo_papelera=True` para casos
+  específicos (vistas de "Archivados", "Papelera", "Admin papelera").
+- Las mutaciones de visibilidad (`archivar`, `desarchivar`, etc.) son
+  métodos finitos del repositorio. La lógica de orquestación + audit event
+  vive en `src/core/usecases/archivar_documento.py`.
 """
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import select
 
-from src.core.models import Documento, EstadoEntrevista
-from src.storage.db import DocumentoRow, EstadoEntrevistaRow, session_scope
+from src.core.models import Documento, EstadoEntrevista, Version
+from src.storage.db import (
+    DocumentoRow,
+    EstadoEntrevistaRow,
+    VersionRow,
+    session_scope,
+)
 
 
 class DocumentoRepository:
@@ -35,6 +48,9 @@ class DocumentoRepository:
                         payload_json=payload,
                         creado_en=documento.creado_en,
                         actualizado_en=documento.actualizado_en,
+                        archivado=documento.archivado,
+                        en_papelera=documento.en_papelera,
+                        archivado_en=documento.archivado_en,
                     )
                 )
             else:
@@ -44,6 +60,9 @@ class DocumentoRepository:
                 row.nombre_modelo = documento.metadata_modelo.nombre_modelo
                 row.payload_json = payload
                 row.actualizado_en = documento.actualizado_en
+                row.archivado = documento.archivado
+                row.en_papelera = documento.en_papelera
+                row.archivado_en = documento.archivado_en
 
     def obtener(self, documento_id: UUID) -> Documento | None:
         """Devuelve el Documento o None si no existe."""
@@ -53,13 +72,56 @@ class DocumentoRepository:
                 return None
             return Documento.model_validate_json(row.payload_json)
 
-    def listar_por_usuario(self, user_id: str = "default") -> list[Documento]:
-        """Lista todos los documentos de un usuario, ordenados por más reciente."""
+    def listar_por_usuario(
+        self,
+        user_id: str = "default",
+        *,
+        incluir_archivados: bool = False,
+        solo_papelera: bool = False,
+    ) -> list[Documento]:
+        """Lista documentos de un usuario, ordenados por más reciente.
+
+        Default: solo activos (no archivados, no en papelera). Útil para home.
+        - `incluir_archivados=True`: incluye archivados, excluye papelera.
+        - `solo_papelera=True`: SOLO los que están en papelera.
+        """
         with session_scope() as s:
             stmt = (
                 select(DocumentoRow)
                 .where(DocumentoRow.user_id == user_id)
                 .order_by(DocumentoRow.actualizado_en.desc())
+            )
+            if solo_papelera:
+                stmt = stmt.where(DocumentoRow.en_papelera.is_(True))
+            else:
+                stmt = stmt.where(DocumentoRow.en_papelera.is_(False))
+                if not incluir_archivados:
+                    stmt = stmt.where(DocumentoRow.archivado.is_(False))
+            rows = s.execute(stmt).scalars().all()
+            return [Documento.model_validate_json(r.payload_json) for r in rows]
+
+    def listar_papelera_global(self) -> list[Documento]:
+        """Solo para admins: lista TODOS los documentos en papelera, todos los users."""
+        with session_scope() as s:
+            stmt = (
+                select(DocumentoRow)
+                .where(DocumentoRow.en_papelera.is_(True))
+                .order_by(DocumentoRow.actualizado_en.desc())
+            )
+            rows = s.execute(stmt).scalars().all()
+            return [Documento.model_validate_json(r.payload_json) for r in rows]
+
+    def listar_papelera_expirada(self, dias_retencion: int = 30) -> list[Documento]:
+        """Lista documentos en papelera con `archivado_en` antes del cutoff.
+
+        Útil para el job de purge automática.
+        """
+        cutoff = datetime.now(UTC) - timedelta(days=dias_retencion)
+        with session_scope() as s:
+            stmt = select(DocumentoRow).where(
+                DocumentoRow.en_papelera.is_(True),
+                DocumentoRow.archivado_en.isnot(None),
+                DocumentoRow.archivado_en < cutoff,
             )
             rows = s.execute(stmt).scalars().all()
             return [Documento.model_validate_json(r.payload_json) for r in rows]
@@ -119,3 +181,100 @@ class EstadoEntrevistaRepository:
                 return False
             s.delete(row)
             return True
+
+
+class VersionRepository:
+    """Persistencia de versiones (snapshots inmutables) — Fase C.2."""
+
+    def crear(self, version: Version) -> None:
+        """Inserta una versión. Las versiones son inmutables — no hay update."""
+        with session_scope() as s:
+            s.add(
+                VersionRow(
+                    id=str(version.id),
+                    documento_id=str(version.documento_id),
+                    numero=version.numero,
+                    snapshot_json=version.snapshot_json,
+                    hash_contenido=version.hash_contenido,
+                    comentario=version.comentario,
+                    creado_en=version.creado_en,
+                )
+            )
+
+    def obtener(self, version_id: UUID) -> Version | None:
+        with session_scope() as s:
+            row = s.get(VersionRow, str(version_id))
+            if row is None:
+                return None
+            return Version(
+                id=UUID(row.id),
+                documento_id=UUID(row.documento_id),
+                numero=row.numero,
+                snapshot_json=row.snapshot_json,
+                hash_contenido=row.hash_contenido,
+                comentario=row.comentario,
+                creado_en=row.creado_en,
+            )
+
+    def listar_por_documento(self, documento_id: UUID) -> list[Version]:
+        """Devuelve versiones ordenadas por número ascendente (v1, v2, …)."""
+        with session_scope() as s:
+            stmt = (
+                select(VersionRow)
+                .where(VersionRow.documento_id == str(documento_id))
+                .order_by(VersionRow.numero.asc())
+            )
+            rows = s.execute(stmt).scalars().all()
+            return [
+                Version(
+                    id=UUID(r.id),
+                    documento_id=UUID(r.documento_id),
+                    numero=r.numero,
+                    snapshot_json=r.snapshot_json,
+                    hash_contenido=r.hash_contenido,
+                    comentario=r.comentario,
+                    creado_en=r.creado_en,
+                )
+                for r in rows
+            ]
+
+    def proximo_numero(self, documento_id: UUID) -> int:
+        """Devuelve el próximo número de versión a usar para este documento.
+
+        Si no hay versiones previas → 1. Si hay vN → N+1.
+        """
+        with session_scope() as s:
+            stmt = (
+                select(VersionRow.numero)
+                .where(VersionRow.documento_id == str(documento_id))
+                .order_by(VersionRow.numero.desc())
+                .limit(1)
+            )
+            ultimo = s.execute(stmt).scalar_one_or_none()
+            return (ultimo or 0) + 1
+
+    def ultima_version(self, documento_id: UUID) -> Version | None:
+        versiones = self.listar_por_documento(documento_id)
+        return versiones[-1] if versiones else None
+
+    def por_doc_y_numero(self, documento_id: UUID, numero: int) -> Version | None:
+        """Devuelve la versión `numero` del documento, o None si no existe."""
+        with session_scope() as s:
+            stmt = (
+                select(VersionRow)
+                .where(VersionRow.documento_id == str(documento_id))
+                .where(VersionRow.numero == numero)
+                .limit(1)
+            )
+            row = s.execute(stmt).scalar_one_or_none()
+            if row is None:
+                return None
+            return Version(
+                id=UUID(row.id),
+                documento_id=UUID(row.documento_id),
+                numero=row.numero,
+                snapshot_json=row.snapshot_json,
+                hash_contenido=row.hash_contenido,
+                comentario=row.comentario,
+                creado_en=row.creado_en,
+            )
