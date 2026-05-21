@@ -18,8 +18,9 @@ test.describe("importar documento .docx", () => {
     // 1. Crear un doc nuevo y exportarlo
     await crearDocumentoMRM(page, "E2E Importar");
 
-    const downloadPromise = page.waitForEvent("download", { timeout: 30_000 });
     await page.getByRole("button", { name: /Exportar DOCX/ }).click();
+    const downloadPromise = page.waitForEvent("download", { timeout: 30_000 });
+    await page.getByRole("menuitem", { name: /Bilingüe \(recomendado\)/ }).click();
     const download = await downloadPromise;
 
     // Guardar con extensión .docx para que el validador del frontend lo

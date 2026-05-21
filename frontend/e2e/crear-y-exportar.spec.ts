@@ -58,9 +58,10 @@ test.describe("happy-path: crear + exportar", () => {
     await expect(page.getByText("Borrador", { exact: true })).toBeVisible();
     await expect(page.getByText(/28 secciones del template/)).toBeVisible();
 
-    // 6. Exportar DOCX — espera el download event
-    const downloadPromise = page.waitForEvent("download", { timeout: 30_000 });
+    // 6. Exportar DOCX — abre el dropdown y elige Bilingüe (default recomendado)
     await page.getByRole("button", { name: /Exportar DOCX/ }).click();
+    const downloadPromise = page.waitForEvent("download", { timeout: 30_000 });
+    await page.getByRole("menuitem", { name: /Bilingüe \(recomendado\)/ }).click();
     const download = await downloadPromise;
 
     // 7. El archivo descargado tiene el nombre esperado y no está vacío
