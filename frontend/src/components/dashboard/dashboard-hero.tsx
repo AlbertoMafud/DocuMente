@@ -2,18 +2,59 @@
  * DashboardHero — header compacto del documento: nombre + estado pill +
  * meta (secciones, eventos) + acciones (Editar metadata, Exportar DOCX).
  *
+ * El selector de idioma del export está en un DropdownMenu — soporta los
+ * 5 modos del backend (bilingue, es, es_normalize, en, en_normalize).
+ *
  * Replica el patrón premium T1 implementado en Streamlit (dashboard.py).
  */
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, Edit, Download } from "lucide-react";
+import { ArrowLeft, Edit, Download, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 
 import type { Documento } from "@/lib/api/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { exportarApi } from "@/lib/api/client";
+
+type IdiomaExport = "bilingue" | "es" | "es_normalize" | "en" | "en_normalize";
+
+const IDIOMAS: { value: IdiomaExport; label: string; descripcion: string }[] = [
+  {
+    value: "bilingue",
+    label: "Bilingüe (recomendado)",
+    descripcion: "Mantiene el contenido en su idioma original",
+  },
+  {
+    value: "es",
+    label: "Español",
+    descripcion: "Sin transformación LLM",
+  },
+  {
+    value: "es_normalize",
+    label: "Español — normalizar",
+    descripcion: "LLM revisa redacción y consistencia",
+  },
+  {
+    value: "en",
+    label: "Inglés",
+    descripcion: "Traduce todo al inglés vía LLM",
+  },
+  {
+    value: "en_normalize",
+    label: "Inglés — normalizar",
+    descripcion: "Traduce + normaliza redacción",
+  },
+];
 
 const ESTADO_VARIANT: Record<
   Documento["estado"],
@@ -41,17 +82,19 @@ interface DashboardHeroProps {
 export function DashboardHero({ documento }: DashboardHeroProps) {
   const nombre = documento.metadata_modelo.nombre_modelo || "Documento sin nombre";
 
-  async function handleExportar() {
-    const toastId = toast.loading("Generando DOCX con marca SMNYL…");
+  async function handleExportar(idioma: IdiomaExport) {
+    const idiomaLabel = IDIOMAS.find((i) => i.value === idioma)?.label ?? idioma;
+    const toastId = toast.loading(`Generando DOCX (${idiomaLabel})…`);
     try {
       const blob = await exportarApi.docx(documento.id, {
-        idioma_objetivo: "bilingue",
+        idioma_objetivo: idioma,
         crear_version: false,
       });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${nombre.replace(/\s+/g, "_")}.docx`;
+      const sufijo = idioma === "en" || idioma === "en_normalize" ? "_EN" : "";
+      a.download = `${nombre.replace(/\s+/g, "_")}${sufijo}.docx`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -100,10 +143,31 @@ export function DashboardHero({ documento }: DashboardHeroProps) {
               Editar metadata
             </Link>
           </Button>
-          <Button size="default" onClick={handleExportar}>
-            <Download className="mr-1 h-4 w-4" />
-            Exportar DOCX
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="default">
+                <Download className="mr-1 h-4 w-4" />
+                Exportar DOCX
+                <ChevronDown className="ml-1 h-3.5 w-3.5 opacity-80" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-72">
+              <DropdownMenuLabel>Elige idioma</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {IDIOMAS.map((idioma) => (
+                <DropdownMenuItem
+                  key={idioma.value}
+                  onSelect={() => handleExportar(idioma.value)}
+                  className="flex-col items-start gap-0.5 py-2"
+                >
+                  <span className="text-sm font-medium">{idioma.label}</span>
+                  <span className="text-xs text-smnyl-text-muted">
+                    {idioma.descripcion}
+                  </span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
     </div>
