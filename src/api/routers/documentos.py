@@ -17,11 +17,16 @@ Endpoints:
 
 from __future__ import annotations
 
+import asyncio
+import json
+import logging
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile, status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from src.api.auth import CurrentUser
@@ -36,7 +41,13 @@ from src.api.schemas import (
     OkResponse,
     RegistrarSignoffRequest,
 )
-from src.core.models import EventoAuditoria
+from src.core.models import (
+    Documento,
+    EventoAuditoria,
+    FuenteContexto,
+    MetadataModelo,
+)
+from src.core.template_catalog import construir_secciones_vacias
 from src.core.template_catalog_prophet import construir_secciones_vacias_prophet
 from src.core.usecases import (
     ArchivarDocumento,
@@ -45,6 +56,14 @@ from src.core.usecases import (
     RegistrarSignoff,
     purgar_papelera_expirada,
 )
+from src.core.usecases.sugerencias_multifuente import (
+    EventoProgreso,
+    SugerenciasMultiFuente,
+)
+from src.docs.readers import extraer_texto
+from src.llm.vision_describer import VisionDescriber
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/documentos", tags=["documentos"])
 
@@ -185,6 +204,201 @@ async def crear_con_fuentes(
         secciones_prellenadas=resultado.secciones_prellenadas,
         llm_disponible=resultado.llm_disponible,
         advertencias=resultado.advertencias,
+    )
+
+
+def _sse_event(event: str, data: dict) -> str:
+    """Formatea un evento SSE estándar — type + JSON payload."""
+    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+@router.post("/crear-con-fuentes/stream")
+async def crear_con_fuentes_stream(
+    repo: DocRepoDep,
+    llm: LlmClientDep,
+    user: CurrentUser,
+    nombre_modelo: str = Form(...),
+    actor: str | None = Form(default=None),
+    describir_imagenes: bool = Form(default=False),
+    fuentes: list[UploadFile] = File(default=[]),  # noqa: B008
+) -> StreamingResponse:
+    """Versión streaming de `crear-con-fuentes` — emite Server-Sent Events.
+
+    Eventos:
+    - `created`: documento esqueleto guardado (rápido, sin LLM).
+        data: {"documento_id": "...", "total_secciones": 28, "fuentes_extraidas": N}
+    - `progress`: una sección terminó de procesar (LLM).
+        data: {"seccion_id", "seccion_nombre", "seccion_numero",
+               "completadas", "total", "estado"}
+    - `done`: pipeline completo.
+        data: {"documento_id", "secciones_prellenadas", "advertencias"}
+    - `error`: fallo no recuperable.
+        data: {"detail"}
+
+    El cliente debe usar EventSource o equivalente para consumir.
+    """
+    actor_final = (actor or user).strip() or user
+    nombre = nombre_modelo.strip() or "Documento sin nombre"
+    model_id = nombre.replace(" ", "_").lower() or "doc"
+
+    # Leer todos los bytes de las fuentes ahora (antes del StreamingResponse).
+    # Los UploadFile no son seguros de consumir desde un async generator que
+    # vive después de que el handler regresa.
+    fuentes_data: list[tuple[bytes, str]] = []
+    for f in fuentes:
+        if f.filename:
+            contenido = await f.read()
+            fuentes_data.append((contenido, f.filename))
+
+    async def event_stream() -> AsyncIterator[str]:
+        try:
+            # 1. Crear documento esqueleto sin LLM (rápido)
+            from io import BytesIO
+
+            documento = Documento(
+                user_id=actor_final,
+                metadata_modelo=MetadataModelo(nombre_modelo=nombre, model_id=model_id),
+                secciones=construir_secciones_vacias(),
+            )
+            documento.registrar_evento(
+                EventoAuditoria(
+                    actor=actor_final,
+                    tipo="documento_creado",
+                    descripcion=f"Documento creado desde cero: {nombre}",
+                    metadata={"model_id": model_id, "stream": "true"},
+                )
+            )
+
+            # 2. Procesar fuentes (extraer texto, no llama LLM excepto visión)
+            vision_describer = (
+                VisionDescriber(llm) if (describir_imagenes and llm is not None) else None
+            )
+            fuentes_descartadas: list[str] = []
+            for raw_bytes, archivo_nombre in fuentes_data:
+                try:
+                    tipo, texto = extraer_texto(
+                        BytesIO(raw_bytes),
+                        archivo_nombre,
+                        vision_describer=vision_describer,
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "Stream: no se pudo extraer '%s': %s",
+                        archivo_nombre,
+                        exc,
+                    )
+                    fuentes_descartadas.append(archivo_nombre)
+                    continue
+                if texto.strip():
+                    documento.fuentes_contexto.append(
+                        FuenteContexto(
+                            nombre_archivo=archivo_nombre,
+                            tipo=tipo,
+                            texto_extraido=texto,
+                        )
+                    )
+                else:
+                    fuentes_descartadas.append(archivo_nombre)
+
+            repo.guardar(documento)
+
+            # Evento "created" — documento ya tiene ID persistido
+            yield _sse_event(
+                "created",
+                {
+                    "documento_id": str(documento.id),
+                    "total_secciones": len(documento.secciones),
+                    "fuentes_extraidas": len(documento.fuentes_contexto),
+                    "fuentes_descartadas": fuentes_descartadas,
+                },
+            )
+
+            # 3. Si no hay LLM o no hay fuentes, terminamos sin sugerencias
+            advertencias: list[str] = []
+            if fuentes_descartadas:
+                advertencias.append(
+                    f"No se pudo leer texto útil de: {', '.join(fuentes_descartadas)}."
+                )
+
+            if llm is None and documento.fuentes_contexto:
+                advertencias.append(
+                    "Fuentes guardadas pero LLM no disponible — sin borradores automáticos."
+                )
+
+            secciones_prellenadas = 0
+            if llm is not None and documento.fuentes_contexto:
+                # 4. Pipeline LLM — usar callback para emitir SSE por sección
+                queue: asyncio.Queue[EventoProgreso | None] = asyncio.Queue()
+
+                async def on_progress(e: EventoProgreso) -> None:
+                    await queue.put(e)
+
+                uc_sugerencias = SugerenciasMultiFuente(llm)
+                # Lanzar el pipeline LLM en background. Su callback va a
+                # ir poniendo eventos en la queue mientras procesa.
+                pipeline_task = asyncio.create_task(
+                    uc_sugerencias.ejecutar_async(
+                        documento,
+                        on_progress=on_progress,
+                    )
+                )
+
+                # Drenar la queue hasta que el pipeline termine
+                while True:
+                    if pipeline_task.done() and queue.empty():
+                        break
+                    try:
+                        evento = await asyncio.wait_for(queue.get(), timeout=0.5)
+                    except TimeoutError:
+                        continue
+                    yield _sse_event(
+                        "progress",
+                        {
+                            "seccion_id": evento.seccion_id,
+                            "seccion_nombre": evento.seccion_nombre,
+                            "seccion_numero": evento.seccion_numero,
+                            "completadas": evento.completadas,
+                            "total": evento.total,
+                            "estado": evento.estado,
+                        },
+                    )
+
+                # Recuperar resultado final (puede haber lanzado excepción)
+                resultado_sugerencias = await pipeline_task
+                secciones_prellenadas = resultado_sugerencias.secciones_pobladas
+                if resultado_sugerencias.secciones_pobladas > 0:
+                    repo.guardar(documento)
+                if resultado_sugerencias.hubo_errores:
+                    advertencias.append(
+                        f"Algunas secciones no se pudieron prellenar "
+                        f"({len(resultado_sugerencias.errores)} error(es) al llamar al LLM)."
+                    )
+
+            # 5. Evento final con resumen + documento_id para que el frontend
+            # navegue al dashboard
+            yield _sse_event(
+                "done",
+                {
+                    "documento_id": str(documento.id),
+                    "secciones_prellenadas": secciones_prellenadas,
+                    "advertencias": advertencias,
+                    "llm_disponible": llm is not None,
+                },
+            )
+        except Exception as exc:
+            logger.exception("Stream falló: %s", exc)
+            yield _sse_event("error", {"detail": str(exc)})
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            # Algunos proxies (nginx) cierran conexiones largas si no hay traffic;
+            # X-Accel-Buffering=no le dice a nginx que no bufferee.
+            "X-Accel-Buffering": "no",
+        },
     )
 
 
