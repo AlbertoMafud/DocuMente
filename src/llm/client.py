@@ -71,6 +71,10 @@ class LLMClient(Protocol):
     Implementaciones disponibles:
     - `AnthropicClient`: usa Anthropic SDK directo con estrategia tiered.
     - `BedrockClient` (post-MVP): mismo modelo Claude vía AWS Bedrock.
+
+    Ofrece tanto interfaz síncrona (`chat`) como asíncrona (`chat_async`).
+    Los use cases legacy usan síncrona; flujos que necesitan paralelizar
+    múltiples llamadas (SugerenciasMultiFuente, streaming) usan async.
     """
 
     def chat(
@@ -81,7 +85,7 @@ class LLMClient(Protocol):
         messages: list[MessageParam],
         max_tokens: int = 4096,
     ) -> LLMResponse:
-        """Manda un turno al LLM y devuelve la respuesta del modelo.
+        """Manda un turno al LLM (sincrónico) y devuelve la respuesta.
 
         Args:
             tarea: tipo de trabajo, mapea internamente al modelo apropiado.
@@ -89,6 +93,19 @@ class LLMClient(Protocol):
                 `cache_control={"type": "ephemeral"}` para cachear el prefijo.
             messages: historia de la conversación (turnos user/assistant).
             max_tokens: techo de tokens en la respuesta.
+        """
+        ...
+
+    async def chat_async(
+        self,
+        *,
+        tarea: Tarea,
+        system_blocks: list[TextBlockParam],
+        messages: list[MessageParam],
+        max_tokens: int = 4096,
+    ) -> LLMResponse:
+        """Versión async de `chat` — permite `asyncio.gather` para paralelizar
+        múltiples llamadas. Misma semántica + mismos kwargs que `chat`.
         """
         ...
 
@@ -115,6 +132,10 @@ class AnthropicClient:
                 "(ver .env.example) antes de usar el LLMClient."
             )
         self._client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        # AsyncAnthropic comparte la API key + el pool de conexiones — usar
+        # ambos clientes en el mismo proceso es seguro. Existe desde
+        # anthropic SDK ≥0.50.
+        self._async_client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
         self._modelos: dict[Tarea, str] = {
             **_MODELO_POR_TAREA_DEFAULT,
             **(modelos_override or {}),
@@ -124,14 +145,19 @@ class AnthropicClient:
         """Devuelve el ID del modelo que se usará para una tarea."""
         return self._modelos[tarea]
 
-    def chat(
+    def _construir_kwargs(
         self,
         *,
         tarea: Tarea,
         system_blocks: list[TextBlockParam],
         messages: list[MessageParam],
-        max_tokens: int = 4096,
-    ) -> LLMResponse:
+        max_tokens: int,
+    ) -> tuple[str, dict[str, Any]]:
+        """Devuelve `(modelo_id, kwargs)` listos para `messages.create(**kwargs)`.
+
+        Compartido entre `chat` (sync) y `chat_async` para no duplicar la
+        lógica de tier + thinking + effort.
+        """
         modelo = self._modelos[tarea]
         kwargs: dict[str, Any] = {
             "model": modelo,
@@ -141,29 +167,26 @@ class AnthropicClient:
         }
 
         # Adaptive thinking + effort según tarea.
-        # Opus 4.7 / Sonnet 4.6 / Haiku 4.5 — todos soportan adaptive.
         if tarea == "drafting":
-            # Borrador profesional: máxima calidad
             kwargs["thinking"] = {"type": "adaptive"}
             kwargs["output_config"] = {"effort": "high"}
         elif tarea == "chat":
-            # Entrevista: balance calidad/latencia/costo
             kwargs["thinking"] = {"type": "adaptive"}
             kwargs["output_config"] = {"effort": "medium"}
         else:  # extraction y vision
-            # Haiku 4.5 NO soporta el parámetro effort (ver shared/models.md)
-            # ni adaptive thinking en algunas versiones — usar config mínima.
-            # Para vision, además, los mensajes traen content blocks tipo image.
+            # Haiku 4.5 NO soporta `effort` ni adaptive thinking confiablemente.
             kwargs["thinking"] = {"type": "disabled"}
 
-        response = self._client.messages.create(**kwargs)
+        return modelo, kwargs
 
+    @staticmethod
+    def _parsear_respuesta(response: Any, modelo: str) -> LLMResponse:
+        """Convierte la respuesta cruda del SDK en `LLMResponse` neutral."""
         text = "".join(
             block.text  # type: ignore[union-attr]
             for block in response.content
             if block.type == "text"
         )
-
         usage = response.usage
         return LLMResponse(
             text=text,
@@ -173,3 +196,44 @@ class AnthropicClient:
             cache_read_tokens=getattr(usage, "cache_read_input_tokens", 0) or 0,
             cache_creation_tokens=getattr(usage, "cache_creation_input_tokens", 0) or 0,
         )
+
+    def chat(
+        self,
+        *,
+        tarea: Tarea,
+        system_blocks: list[TextBlockParam],
+        messages: list[MessageParam],
+        max_tokens: int = 4096,
+    ) -> LLMResponse:
+        modelo, kwargs = self._construir_kwargs(
+            tarea=tarea,
+            system_blocks=system_blocks,
+            messages=messages,
+            max_tokens=max_tokens,
+        )
+        response = self._client.messages.create(**kwargs)
+        return self._parsear_respuesta(response, modelo)
+
+    async def chat_async(
+        self,
+        *,
+        tarea: Tarea,
+        system_blocks: list[TextBlockParam],
+        messages: list[MessageParam],
+        max_tokens: int = 4096,
+    ) -> LLMResponse:
+        """Async equivalente de `chat`. Apto para `asyncio.gather` con N tareas
+        en paralelo. Usa el mismo modelo, mismo kwargs, mismo parser.
+
+        Atención: el SDK AsyncAnthropic respeta los rate limits del tier de la
+        cuenta. Si paralelizamos demasiadas llamadas, el SDK devuelve 429.
+        Mitigación recomendada en el caller: `asyncio.Semaphore(5)` o similar.
+        """
+        modelo, kwargs = self._construir_kwargs(
+            tarea=tarea,
+            system_blocks=system_blocks,
+            messages=messages,
+            max_tokens=max_tokens,
+        )
+        response = await self._async_client.messages.create(**kwargs)
+        return self._parsear_respuesta(response, modelo)

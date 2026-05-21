@@ -36,6 +36,7 @@ class FakeLLM:
             "chat": "claude-sonnet-4-6",
             "drafting": "claude-opus-4-7",
             "extraction": "claude-haiku-4-5",
+            "vision": "claude-haiku-4-5",
         }
         return LLMResponse(
             text=text,
@@ -44,6 +45,26 @@ class FakeLLM:
             output_tokens=200,
             cache_read_tokens=12000,
             cache_creation_tokens=0,
+        )
+
+    async def chat_async(
+        self,
+        *,
+        tarea: str,
+        system_blocks: list[TextBlockParam],
+        messages: list[MessageParam],
+        max_tokens: int = 4096,
+    ) -> LLMResponse:
+        """Async equivalente — los tests pueden usar este FakeLLM para flujos
+        que usan AsyncAnthropic.chat_async (SugerenciasMultiFuente paralelizado)
+        sin tocar nada más. Internamente delega a chat sincrónico — no hace
+        sleep ni espera real, así que paralelismo en tests es instantáneo.
+        """
+        return self.chat(
+            tarea=tarea,
+            system_blocks=system_blocks,
+            messages=messages,
+            max_tokens=max_tokens,
         )
 
 
