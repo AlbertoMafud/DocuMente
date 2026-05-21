@@ -25,6 +25,7 @@ export default function ImportarPage() {
   const router = useRouter();
   const [ancla, setAncla] = useState<File | null>(null);
   const [fuentes, setFuentes] = useState<File[]>([]);
+  const [describirImagenes, setDescribirImagenes] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [dragOver, setDragOver] = useState<"ancla" | "fuentes" | null>(null);
   const anclaInputRef = useRef<HTMLInputElement>(null);
@@ -55,7 +56,7 @@ export default function ImportarPage() {
     setSubmitting(true);
     const toastId = toast.loading("Procesando documento — esto puede tardar 10-30s…");
     try {
-      const doc = await importarApi.docx(ancla, fuentes);
+      const doc = await importarApi.docx(ancla, fuentes, "default", describirImagenes);
       toast.success(`"${doc.metadata_modelo.nombre_modelo || ancla.name}" importado.`, {
         id: toastId,
       });
@@ -178,6 +179,28 @@ export default function ImportarPage() {
           </div>
         )}
       </section>
+
+      {/* Checkbox de visión Claude para imágenes embebidas */}
+      {ancla && (
+        <label className="flex items-start gap-2 cursor-pointer p-3 rounded-md border border-smnyl-border bg-smnyl-bg-soft/30">
+          <input
+            type="checkbox"
+            checked={describirImagenes}
+            onChange={(e) => setDescribirImagenes(e.target.checked)}
+            className="mt-0.5 h-4 w-4 rounded border-smnyl-border text-smnyl-primary focus:ring-smnyl-primary"
+          />
+          <span className="text-xs text-smnyl-text-muted leading-relaxed">
+            <span className="font-medium text-smnyl-text">
+              Describir imágenes embebidas con IA
+            </span>
+            <br />
+            Procesa screenshots, flowcharts y diagramas con Claude Vision
+            (Haiku). Agrega ~2-5s por imagen y costo marginal
+            (~$0.001-0.005 c/u). Útil para docs con capturas de Prophet,
+            Excel o sistemas. Resultados se cachean por hash.
+          </span>
+        </label>
+      )}
 
       <div className="flex gap-3 pt-4">
         <Button size="lg" onClick={handleSubmit} disabled={!ancla || submitting}>

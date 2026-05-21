@@ -112,10 +112,12 @@ export const documentosApi = {
     nombre_modelo: string,
     fuentes: File[],
     actor: string = "default",
+    describir_imagenes: boolean = false,
   ): Promise<CrearConFuentesResponse> {
     const fd = new FormData();
     fd.append("nombre_modelo", nombre_modelo);
     fd.append("actor", actor);
+    fd.append("describir_imagenes", String(describir_imagenes));
     for (const f of fuentes) fd.append("fuentes", f);
     const headers: Record<string, string> = {};
     if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
@@ -327,11 +329,17 @@ export const apendicesApi = {
 // ===== Importar (multipart) =====
 
 export const importarApi = {
-  async docx(ancla: File, fuentes: File[] = [], actor = "default"): Promise<Documento> {
+  async docx(
+    ancla: File,
+    fuentes: File[] = [],
+    actor = "default",
+    describir_imagenes = false,
+  ): Promise<Documento> {
     const fd = new FormData();
     fd.append("ancla", ancla);
     for (const f of fuentes) fd.append("fuentes", f);
     fd.append("actor", actor);
+    fd.append("describir_imagenes", String(describir_imagenes));
     // No seteamos Content-Type — el browser pone el boundary correcto.
     const headers: Record<string, string> = {};
     if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;

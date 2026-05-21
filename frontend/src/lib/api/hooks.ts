@@ -123,11 +123,19 @@ export function useCrearDocumentoConFuentes() {
       nombre_modelo,
       fuentes,
       actor = "default",
+      describir_imagenes = false,
     }: {
       nombre_modelo: string;
       fuentes: File[];
       actor?: string;
-    }) => documentosApi.crearConFuentes(nombre_modelo, fuentes, actor),
+      describir_imagenes?: boolean;
+    }) =>
+      documentosApi.crearConFuentes(
+        nombre_modelo,
+        fuentes,
+        actor,
+        describir_imagenes,
+      ),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["documentos"] });
     },

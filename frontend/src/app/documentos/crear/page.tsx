@@ -29,6 +29,7 @@ export default function CrearDocumentoPage() {
   const [tipo, setTipo] = useState<TipoDocumento>("model_development");
   const [nombre, setNombre] = useState("");
   const [fuentes, setFuentes] = useState<File[]>([]);
+  const [describirImagenes, setDescribirImagenes] = useState(false);
   const crear = useCrearDocumento();
   const crearConFuentes = useCrearDocumentoConFuentes();
 
@@ -49,7 +50,11 @@ export default function CrearDocumentoPage() {
           "Esto puede tardar 30-60s con varias.",
       );
       crearConFuentes.mutate(
-        { nombre_modelo: nombre.trim(), fuentes },
+        {
+          nombre_modelo: nombre.trim(),
+          fuentes,
+          describir_imagenes: describirImagenes,
+        },
         {
           onSuccess: (res) => {
             toast.success(
@@ -171,6 +176,26 @@ export default function CrearDocumentoPage() {
               titulo="Arrastra archivos aquí"
               subtitulo="PDF, DOCX, XLSX, CSV, TXT — varios OK"
             />
+            {fuentes.length > 0 && (
+              <label className="flex items-start gap-2 pt-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={describirImagenes}
+                  onChange={(e) => setDescribirImagenes(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-smnyl-border text-smnyl-primary focus:ring-smnyl-primary"
+                />
+                <span className="text-xs text-smnyl-text-muted leading-relaxed">
+                  <span className="font-medium text-smnyl-text">
+                    Describir imágenes embebidas con IA
+                  </span>
+                  <br />
+                  Procesa screenshots, flowcharts y diagramas con Claude
+                  Vision (Haiku). Agrega ~2-5s por imagen y costo marginal
+                  (~$0.001-0.005 c/u). Útil para docs con capturas de
+                  Prophet, Excel o sistemas. Resultados se cachean por hash.
+                </span>
+              </label>
+            )}
           </div>
         )}
 
