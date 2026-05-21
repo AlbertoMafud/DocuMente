@@ -54,7 +54,10 @@ export default function ImportarPage() {
       return;
     }
     setSubmitting(true);
-    const toastId = toast.loading("Procesando documento — esto puede tardar 10-30s…");
+    const toastId = toast.loading(
+      "Procesando documento con IA — esto puede tardar varios minutos " +
+        "(típicamente ~10 min). Puedes dejar la ventana abierta.",
+    );
     try {
       const doc = await importarApi.docx(ancla, fuentes, "default", describirImagenes);
       toast.success(`"${doc.metadata_modelo.nombre_modelo || ancla.name}" importado.`, {

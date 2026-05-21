@@ -46,8 +46,9 @@ export default function CrearDocumentoPage() {
     // Si hay fuentes y el tipo lo permite, usar el flujo multipart con sugerencias
     if (fuentes.length > 0 && puedeUsarFuentes) {
       const toastId = toast.loading(
-        `Procesando ${fuentes.length} fuente${fuentes.length === 1 ? "" : "s"}… ` +
-          "Esto puede tardar 30-60s con varias.",
+        `Procesando ${fuentes.length} fuente${fuentes.length === 1 ? "" : "s"} con IA — ` +
+          "esto puede tardar varios minutos (típicamente ~10 min con LLM activo). " +
+          "Puedes dejar la ventana abierta.",
       );
       crearConFuentes.mutate(
         {
