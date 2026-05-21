@@ -8,6 +8,8 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, FileText, Download, Edit } from "lucide-react";
 import { toast } from "sonner";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 import type { Seccion } from "@/lib/api/types";
 import { Badge } from "@/components/ui/badge";
@@ -150,9 +152,21 @@ function SeccionPreview({ seccion, documentoId }: SeccionPreviewProps) {
         </div>
       </div>
       {seccion.contenido ? (
-        <pre className="whitespace-pre-wrap font-body text-sm leading-relaxed text-smnyl-text">
-          {seccion.contenido}
-        </pre>
+        <div
+          data-testid="seccion-markdown"
+          className="
+            prose prose-sm max-w-none font-body text-smnyl-text leading-relaxed
+            prose-headings:font-display prose-headings:text-smnyl-text
+            prose-strong:text-smnyl-text prose-strong:font-semibold
+            prose-table:text-sm prose-table:border-collapse
+            prose-th:border prose-th:border-smnyl-border prose-th:bg-smnyl-bg-soft prose-th:px-3 prose-th:py-2
+            prose-td:border prose-td:border-smnyl-border prose-td:px-3 prose-td:py-2
+            prose-code:bg-smnyl-bg-soft prose-code:px-1 prose-code:rounded
+            prose-a:text-smnyl-primary
+          "
+        >
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{seccion.contenido}</ReactMarkdown>
+        </div>
       ) : seccion.completitud === "omitida" ? (
         <p className="text-sm italic text-smnyl-text-muted">
           Sección marcada como omitida.{" "}
