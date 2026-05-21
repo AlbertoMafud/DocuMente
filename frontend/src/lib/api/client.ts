@@ -12,6 +12,7 @@ import type {
   Apendice,
   Brecha,
   CapituloMRM,
+  CrearConFuentesResponse,
   CrearDocumentoRequest,
   Documento,
   DocumentoListItem,
@@ -106,6 +107,29 @@ export const documentosApi = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+
+  async crearConFuentes(
+    nombre_modelo: string,
+    fuentes: File[],
+    actor: string = "default",
+  ): Promise<CrearConFuentesResponse> {
+    const fd = new FormData();
+    fd.append("nombre_modelo", nombre_modelo);
+    fd.append("actor", actor);
+    for (const f of fuentes) fd.append("fuentes", f);
+    const headers: Record<string, string> = {};
+    if (API_TOKEN) headers.Authorization = `Bearer ${API_TOKEN}`;
+    const res = await fetch(`${API_URL}/documentos/crear-con-fuentes`, {
+      method: "POST",
+      body: fd,
+      headers,
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => res.statusText);
+      throw new APIError(res.status, detail);
+    }
+    return (await res.json()) as CrearConFuentesResponse;
+  },
 
   editarMetadata: (id: string, payload: EditarMetadataRequest) =>
     request<Documento>(`/documentos/${id}/metadata`, {

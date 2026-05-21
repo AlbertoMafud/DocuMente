@@ -21,11 +21,11 @@ from datetime import UTC, datetime
 from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel
 
 from src.api.auth import CurrentUser
-from src.api.deps import DocRepoDep
+from src.api.deps import DocRepoDep, LlmClientDep
 from src.api.errors import not_found
 from src.api.schemas import (
     CambiarEstadoRequest,
@@ -122,6 +122,68 @@ def crear_documento(
         user_id=actor,
     )
     return DocumentoDTO.from_domain(resultado.documento)
+
+
+class _CrearConFuentesResponse(BaseModel):
+    """Respuesta enriquecida del endpoint multipart de creación con fuentes."""
+
+    documento: DocumentoDTO
+    fuentes_extraidas: int
+    fuentes_descartadas: list[str]
+    secciones_prellenadas: int
+    llm_disponible: bool
+    advertencias: list[str]
+
+
+@router.post(
+    "/crear-con-fuentes",
+    response_model=_CrearConFuentesResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def crear_con_fuentes(
+    repo: DocRepoDep,
+    llm: LlmClientDep,
+    user: CurrentUser,
+    nombre_modelo: str = Form(...),
+    actor: str | None = Form(default=None),
+    fuentes: list[UploadFile] = File(default=[]),  # noqa: B008
+) -> _CrearConFuentesResponse:
+    """Crea un documento MRM en blanco + opcionalmente prellena secciones
+    a partir de archivos fuente (PDF, DOCX, XLSX, CSV, TXT).
+
+    Si hay LLM disponible y se subieron fuentes con texto útil, ejecuta
+    `SugerenciasMultiFuente` para generar borradores automáticos en las
+    secciones aplicables. Cada fuente que falle al extraerse se reporta
+    en `fuentes_descartadas` — el flujo no se aborta.
+
+    Solo soporta tipo `model_development` (Prophet usa otro flow).
+    """
+    actor_final = (actor or user).strip() or user
+    nombre = nombre_modelo.strip() or "Documento sin nombre"
+    model_id = nombre.replace(" ", "_").lower() or "doc"
+
+    # Convertir UploadFile → tuple[IO[bytes], filename] que espera el UC
+    fuentes_payload: list[tuple] = []
+    for f in fuentes:
+        if f.filename:
+            fuentes_payload.append((f.file, f.filename))
+
+    uc = CrearDocumentoEnBlanco(repo=repo, llm=llm)
+    resultado = uc.ejecutar(
+        nombre_modelo=nombre,
+        model_id=model_id,
+        user_id=actor_final,
+        fuentes_adicionales=fuentes_payload or None,
+    )
+
+    return _CrearConFuentesResponse(
+        documento=DocumentoDTO.from_domain(resultado.documento),
+        fuentes_extraidas=resultado.fuentes_extraidas,
+        fuentes_descartadas=resultado.fuentes_descartadas,
+        secciones_prellenadas=resultado.secciones_prellenadas,
+        llm_disponible=resultado.llm_disponible,
+        advertencias=resultado.advertencias,
+    )
 
 
 @router.get("/{documento_id}", response_model=DocumentoDTO)

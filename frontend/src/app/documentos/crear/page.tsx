@@ -2,8 +2,9 @@
  * Crear nuevo documento — formulario simple con dos opciones:
  * MRM Model Development (28 secciones NYL) o Ficha Prophet (12 secciones).
  *
- * El usuario solo proporciona el nombre del modelo. Tras crear, redirige
- * al dashboard del documento creado.
+ * Opcionalmente acepta fuentes (PDF, DOCX, XLSX, CSV, TXT) para que el
+ * LLM pre-pueble secciones con borradores automáticos. Solo para tipo
+ * Model Development en esta primera versión.
  */
 "use client";
 
@@ -18,13 +19,21 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useCrearDocumento } from "@/lib/api/hooks";
+import { DropZone } from "@/components/upload/dropzone";
+import { useCrearDocumento, useCrearDocumentoConFuentes } from "@/lib/api/hooks";
+
+const FUENTES_ACCEPT = ".pdf,.docx,.xlsx,.xls,.csv,.txt";
 
 export default function CrearDocumentoPage() {
   const router = useRouter();
   const [tipo, setTipo] = useState<TipoDocumento>("model_development");
   const [nombre, setNombre] = useState("");
+  const [fuentes, setFuentes] = useState<File[]>([]);
   const crear = useCrearDocumento();
+  const crearConFuentes = useCrearDocumentoConFuentes();
+
+  const isPending = crear.isPending || crearConFuentes.isPending;
+  const puedeUsarFuentes = tipo === "model_development";
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -32,6 +41,47 @@ export default function CrearDocumentoPage() {
       toast.error("Necesito un nombre para el modelo.");
       return;
     }
+
+    // Si hay fuentes y el tipo lo permite, usar el flujo multipart con sugerencias
+    if (fuentes.length > 0 && puedeUsarFuentes) {
+      const toastId = toast.loading(
+        `Procesando ${fuentes.length} fuente${fuentes.length === 1 ? "" : "s"}… ` +
+          "Esto puede tardar 30-60s con varias.",
+      );
+      crearConFuentes.mutate(
+        { nombre_modelo: nombre.trim(), fuentes },
+        {
+          onSuccess: (res) => {
+            toast.success(
+              `"${res.documento.metadata_modelo.nombre_modelo}" creado.` +
+                (res.secciones_prellenadas > 0
+                  ? ` ${res.secciones_prellenadas} sección(es) con borrador automático.`
+                  : ""),
+              { id: toastId },
+            );
+            if (res.fuentes_descartadas.length > 0) {
+              toast.warning(
+                `No se pudo leer: ${res.fuentes_descartadas.join(", ")}`,
+                { duration: 8000 },
+              );
+            }
+            if (!res.llm_disponible) {
+              toast.warning(
+                "Fuentes guardadas pero LLM no disponible — sin borradores automáticos.",
+                { duration: 8000 },
+              );
+            }
+            router.push(`/documentos/${res.documento.id}`);
+          },
+          onError: (err) => {
+            toast.error(`No se pudo crear: ${(err as Error).message}`, { id: toastId });
+          },
+        },
+      );
+      return;
+    }
+
+    // Sin fuentes — flujo JSON original
     crear.mutate(
       { tipo, nombre_modelo: nombre.trim() },
       {
@@ -100,11 +150,37 @@ export default function CrearDocumentoPage() {
           </p>
         </div>
 
+        {/* Fuentes opcionales — solo Model Development por ahora */}
+        {puedeUsarFuentes && (
+          <div className="space-y-2">
+            <Label>
+              Fuentes adicionales{" "}
+              <span className="text-smnyl-text-muted font-normal">(opcional)</span>
+            </Label>
+            <p className="text-xs text-smnyl-text-muted">
+              PDFs, Word, Excel, CSV o TXT con información del modelo. Si subes algo,
+              Claude lo leerá y propondrá borradores automáticos para las secciones
+              aplicables. No necesitas que sea un documento institucional formal —
+              instructivos o notas también sirven.
+            </p>
+            <DropZone
+              accept={FUENTES_ACCEPT}
+              multiple
+              files={fuentes}
+              onChange={setFuentes}
+              titulo="Arrastra archivos aquí"
+              subtitulo="PDF, DOCX, XLSX, CSV, TXT — varios OK"
+            />
+          </div>
+        )}
+
         {/* Submit */}
         <div className="flex gap-3 pt-2">
-          <Button type="submit" size="lg" disabled={crear.isPending}>
-            {crear.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Crear documento
+          <Button type="submit" size="lg" disabled={isPending}>
+            {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {fuentes.length > 0 && puedeUsarFuentes
+              ? `Crear con ${fuentes.length} fuente${fuentes.length === 1 ? "" : "s"}`
+              : "Crear documento"}
           </Button>
           <Button type="button" variant="ghost" size="lg" asChild>
             <Link href="/">Cancelar</Link>

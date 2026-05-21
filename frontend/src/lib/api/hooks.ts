@@ -116,6 +116,24 @@ export function useCrearDocumento() {
   });
 }
 
+export function useCrearDocumentoConFuentes() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      nombre_modelo,
+      fuentes,
+      actor = "default",
+    }: {
+      nombre_modelo: string;
+      fuentes: File[];
+      actor?: string;
+    }) => documentosApi.crearConFuentes(nombre_modelo, fuentes, actor),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["documentos"] });
+    },
+  });
+}
+
 export function useArchivar() {
   const qc = useQueryClient();
   return useMutation({

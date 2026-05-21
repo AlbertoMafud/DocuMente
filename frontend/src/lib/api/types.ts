@@ -159,6 +159,15 @@ export interface CrearDocumentoRequest {
   actor?: string;
 }
 
+export interface CrearConFuentesResponse {
+  documento: Documento;
+  fuentes_extraidas: number;
+  fuentes_descartadas: string[];
+  secciones_prellenadas: number;
+  llm_disponible: boolean;
+  advertencias: string[];
+}
+
 export type EditarMetadataRequest = Partial<MetadataModelo>;
 
 export interface AccionVisibilidadRequest {
