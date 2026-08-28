@@ -73,12 +73,28 @@ def exportar_docx(
     - `Content-Disposition: attachment; filename="<nombre>.docx"`
     """
     actor = payload.actor or user
+
+    doc_previo = repo.obtener(documento_id)
+    if doc_previo is None:
+        raise not_found("Documento")
+    if doc_previo.tipo not in ("model_development", "prophet"):
+        # Los templates dinámicos del Studio aún no tienen writer propio
+        # (S-E de TEMPLATE_STUDIO_SPEC: plantilla Word genérica institucional).
+        # Renderizarlos con la plantilla MRM produciría un .docx incoherente:
+        # preferimos un error claro antes que un documento de mala calidad.
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail=(
+                "La exportación a Word de documentos creados con templates del "
+                "Studio todavía no está disponible. El contenido está guardado y "
+                "seguro; podrás exportarlo cuando se habilite la plantilla "
+                "institucional genérica."
+            ),
+        )
+
     if payload.polish and llm is not None:
-        doc = repo.obtener(documento_id)
-        if doc is None:
-            raise not_found("Documento")
-        DocumentPolisher(llm).revisar(doc)
-        repo.guardar(doc)
+        DocumentPolisher(llm).revisar(doc_previo)
+        repo.guardar(doc_previo)
 
     uc = ExportarDocumento(
         doc_repo=repo,

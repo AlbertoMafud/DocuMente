@@ -246,3 +246,18 @@ def test_admin_token_bloquea_cuando_esta_configurado(
     assert r.status_code == 201
     # Lectura sigue abierta a usuarios no admin
     assert client.get("/studio/templates").status_code == 200
+
+
+def test_exportar_tipo_dinamico_devuelve_501_no_docx_basura(client: TestClient) -> None:
+    """Preferimos error claro a un .docx incoherente (S-E pendiente)."""
+    t = _crear(client)
+    client.post(f"/studio/templates/{t['id']}/lint")
+    client.post(f"/studio/templates/{t['id']}/estado", json={"accion": "publicar"})
+    doc_id = client.post(
+        "/documentos",
+        json={"nombre_modelo": "Doc dinámico", "tipo": "ficha_de_procedimiento"},
+    ).json()["id"]
+
+    r = client.post(f"/documentos/{doc_id}/exportar", json={})
+    assert r.status_code == 501
+    assert "Studio" in r.json()["detail"]
