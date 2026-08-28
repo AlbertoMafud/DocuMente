@@ -1459,4 +1459,4 @@ Word. Cerrarlo es S-E.
 ### Calidad al cierre
 
 584 pytest · 8/8 Playwright (×3 corridas) · ruff limpio · mypy 42 (baseline) · tsc y ESLint
-limpios · build 20 rutas.
+limpios · build con la ruta /studio incluida.
