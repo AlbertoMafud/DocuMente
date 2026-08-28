@@ -11,6 +11,7 @@ JWT desde el ALB header.
 from __future__ import annotations
 
 import os
+import secrets
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
@@ -44,7 +45,8 @@ def require_auth(
             detail="Bearer token requerido",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    if creds.credentials != expected:
+    # compare_digest: comparación en tiempo constante (resistente a timing attacks)
+    if not secrets.compare_digest(creds.credentials, expected):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Bearer token inválido",

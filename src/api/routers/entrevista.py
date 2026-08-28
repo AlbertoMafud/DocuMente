@@ -51,10 +51,7 @@ def _ensure_llm(llm) -> None:  # type: ignore[no-untyped-def]
     if llm is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=(
-                "Entrevista requiere LLM configurado. "
-                "Define ANTHROPIC_API_KEY en .env."
-            ),
+            detail=("Entrevista requiere LLM configurado. Define ANTHROPIC_API_KEY en .env."),
         )
 
 

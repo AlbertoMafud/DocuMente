@@ -16,7 +16,7 @@ import pytest
 class _StreamlitState(dict):
     """Sustituto mínimo de `st.session_state` que se comporta como dict + attribute."""
 
-    def __getattr__(self, item: str):  # noqa: D401
+    def __getattr__(self, item: str):
         try:
             return self[item]
         except KeyError as e:
@@ -103,9 +103,7 @@ class TestRenderUndoBanner:
         # Y debe describir la acción (archivado)
         assert "archivado" in html.lower()
 
-    def test_papelera_muestra_mensaje_papelera(
-        self, fake_session_state: _StreamlitState
-    ) -> None:
+    def test_papelera_muestra_mensaje_papelera(self, fake_session_state: _StreamlitState) -> None:
         from app import _render_undo_banner
 
         fake_session_state["undo_visibilidad"] = {

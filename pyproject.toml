@@ -3,7 +3,7 @@ name = "documente"
 version = "0.1.0"
 description = "Sistema agéntico local de documentación institucional para SMNYL"
 authors = [{ name = "Alberto Solano" }]
-requires-python = ">=3.11,<3.13"
+requires-python = ">=3.11,<3.15"
 readme = "README.md"
 
 dependencies = [
@@ -18,7 +18,7 @@ dependencies = [
 
     # LLM
     # >=0.50 requerido para parámetro `thinking`. En EC2: `pip install -e ".[dev]"` post-pull.
-    "anthropic>=0.50.0",
+    "anthropic>=0.50.0,<1",
 
     # Documentos
     "python-docx>=1.1.2",
@@ -40,7 +40,6 @@ dependencies = [
 
     # Utilidades
     "python-dotenv>=1.0.1",
-    "structlog>=24.2.0",
 ]
 
 [project.optional-dependencies]

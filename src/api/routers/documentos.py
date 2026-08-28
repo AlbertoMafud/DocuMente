@@ -328,7 +328,9 @@ async def crear_con_fuentes_stream(
             secciones_prellenadas = 0
             if llm is not None and documento.fuentes_contexto:
                 # 4. Pipeline LLM — usar callback para emitir SSE por sección
-                queue: asyncio.Queue[EventoProgreso | None] = asyncio.Queue()
+                # Nadie encola None (no hay sentinel): el drenado termina cuando
+                # el task del pipeline está done y la queue vacía.
+                queue: asyncio.Queue[EventoProgreso] = asyncio.Queue()
 
                 async def on_progress(e: EventoProgreso) -> None:
                     await queue.put(e)

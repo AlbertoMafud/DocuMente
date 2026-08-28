@@ -7,6 +7,7 @@ no está). Sí escriben en una BD SQLite temporal por test.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -34,6 +35,19 @@ def client() -> TestClient:
     from src.api.main import app
 
     return TestClient(app)
+
+
+@pytest.fixture
+def sin_llm() -> Iterator[None]:
+    """Fuerza get_llm_client → None aunque el `.env` real tenga API key."""
+    from src.api.deps import get_llm_client
+    from src.api.main import app
+
+    app.dependency_overrides[get_llm_client] = lambda: None
+    try:
+        yield
+    finally:
+        app.dependency_overrides.pop(get_llm_client, None)
 
 
 # --- Health ---
@@ -122,9 +136,7 @@ def test_crear_documento_prophet_devuelve_201(client: TestClient) -> None:
 
 
 def test_crear_y_obtener_documento(client: TestClient) -> None:
-    created = client.post(
-        "/documentos", json={"nombre_modelo": "Doc A"}
-    ).json()
+    created = client.post("/documentos", json={"nombre_modelo": "Doc A"}).json()
     doc_id = created["id"]
 
     r = client.get(f"/documentos/{doc_id}")
@@ -272,14 +284,14 @@ def test_transicion_invalida_devuelve_409(client: TestClient) -> None:
 # --- LLM gating ---
 
 
-def test_polish_sin_llm_devuelve_503(client: TestClient) -> None:
+def test_polish_sin_llm_devuelve_503(client: TestClient, sin_llm: None) -> None:
     doc = client.post("/documentos", json={"nombre_modelo": "X"}).json()
-    # ANTHROPIC_API_KEY no está set en tests
+    # get_llm_client sobrescrito → None (hermético frente al `.env` real)
     r = client.post(f"/documentos/{doc['id']}/polish")
     assert r.status_code == 503
 
 
-def test_iniciar_entrevista_sin_llm_devuelve_503(client: TestClient) -> None:
+def test_iniciar_entrevista_sin_llm_devuelve_503(client: TestClient, sin_llm: None) -> None:
     doc = client.post("/documentos", json={"nombre_modelo": "X"}).json()
     seccion_id = doc["secciones"][0]["id"]
     r = client.post(f"/documentos/{doc['id']}/entrevista/{seccion_id}/iniciar")

@@ -31,15 +31,22 @@ logger = logging.getLogger(__name__)
 
 
 def _resolver_database_url() -> str:
-    """Lee DATABASE_URL del entorno o cae a SQLite local."""
+    """Resuelve DATABASE_URL: primero os.environ, luego Settings (que lee `.env`).
+
+    os.environ tiene prioridad para que los tests puedan aislarse con
+    monkeypatch.setenv sin pelear con el lru_cache de get_settings().
+    """
     url = os.environ.get("DATABASE_URL")
-    if url:
-        return url
-    # Default: SQLite en data/documente.db relativo al proyecto.
-    proyecto_dir = Path(__file__).resolve().parent.parent.parent
-    db_path = proyecto_dir / "data" / "documente.db"
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-    return f"sqlite:///{db_path}"
+    if not url:
+        from src.config import get_settings
+
+        url = get_settings().database_url
+    # Para SQLite, garantizar que el directorio padre exista (el default de
+    # Settings apunta a data/documente.db y `data/` puede no existir aún).
+    if url.startswith("sqlite:///"):
+        db_path = Path(url.removeprefix("sqlite:///"))
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+    return url
 
 
 class Base(DeclarativeBase):

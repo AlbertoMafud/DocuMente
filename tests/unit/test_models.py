@@ -162,9 +162,7 @@ class TestUltimoGuardadoSeccion:
     """
 
     def test_sin_eventos_devuelve_none(self) -> None:
-        doc = Documento(
-            secciones=[Seccion(id="x", nombre="X", numero="1", obligatoria=True)]
-        )
+        doc = Documento(secciones=[Seccion(id="x", nombre="X", numero="1", obligatoria=True)])
         assert doc.ultimo_guardado_seccion("x") is None
 
     def test_seccion_inexistente_devuelve_none(self) -> None:
@@ -175,9 +173,7 @@ class TestUltimoGuardadoSeccion:
         from datetime import UTC, datetime
 
         ts = datetime(2026, 5, 10, 14, 30, tzinfo=UTC)
-        doc = Documento(
-            secciones=[Seccion(id="x", nombre="X", numero="1", obligatoria=True)]
-        )
+        doc = Documento(secciones=[Seccion(id="x", nombre="X", numero="1", obligatoria=True)])
         doc.audit_trail.append(
             EventoAuditoria(
                 timestamp=ts,
@@ -195,9 +191,7 @@ class TestUltimoGuardadoSeccion:
         ts1 = datetime(2026, 5, 1, 10, 0, tzinfo=UTC)
         ts2 = datetime(2026, 5, 10, 14, 30, tzinfo=UTC)
         ts3 = datetime(2026, 5, 5, 12, 0, tzinfo=UTC)
-        doc = Documento(
-            secciones=[Seccion(id="x", nombre="X", numero="1", obligatoria=True)]
-        )
+        doc = Documento(secciones=[Seccion(id="x", nombre="X", numero="1", obligatoria=True)])
         for ts in (ts1, ts2, ts3):
             doc.audit_trail.append(
                 EventoAuditoria(
@@ -246,9 +240,7 @@ class TestUltimoGuardadoSeccion:
         from datetime import UTC, datetime
 
         ts_otra = datetime(2026, 5, 1, 10, 0, tzinfo=UTC)
-        doc = Documento(
-            secciones=[Seccion(id="x", nombre="X", numero="1", obligatoria=True)]
-        )
+        doc = Documento(secciones=[Seccion(id="x", nombre="X", numero="1", obligatoria=True)])
         # Un evento con seccion_id="x" pero distinto de 'seccion_editada'
         doc.audit_trail.append(
             EventoAuditoria(
