@@ -2,7 +2,7 @@
 
 > Estado vivo del proyecto. Se lee al iniciar sesión y se actualiza al cerrar si hubo cambios significativos.
 
-**Última actualización:** 2026-08-28 (sesión 18 — revisita de arquitectura post-merge + ejecución paralela: quick wins P0/P1, specs Template Studio, auditoría visual React y sus 6 P0 aplicados. **4 commits en `claude/s18-revisita`**, pusheado. Tests: 516/516 Python + 7/7 E2E.)
+**Última actualización:** 2026-08-28 (sesión 19 — Template Studio backend (S-A→S-D) + 12 P1 de la auditoría visual + `AI_HANDOFF.md` para la instancia corporativa. **4 commits en `claude/s19-avance`.** Tests: 584 Python + 7 E2E.)
 
 ---
 
@@ -1284,3 +1284,119 @@ Alberto pidió revisita a profundidad; luego aprobó ejecutar en paralelo con su
 - Schema migrations solo aditivas. Backup antes de cambios arriesgados a BD.
 - NO cambiar tier LLM sin eval. Catálogo MRM de 28 secciones sigue congelado.
 - Templates dinámicos (cuando existan) viven en BD, no en código.
+
+---
+
+## Progreso de sesión 19 (2026-08-28) — Template Studio backend + P1 visuales + blueprint
+
+Sesión de ejecución del plan aprobado en S18. Alberto aprobó la spec del Template Studio y
+pidió avanzar en paralelo. A media sesión se agotaron créditos de Claude y se incorporó
+**Codex vía plugin** para el trabajo de frontend — patrón que conviene repetir.
+
+### Commits (4, en `claude/s19-avance` sobre `main`)
+
+| Commit | Qué |
+|---|---|
+| `0c39d76` | **Template Studio backend** (S-A→S-D de la spec) |
+| `0493a8c` | **12 hallazgos P1** de la auditoría visual (ejecutado por Codex) |
+| `1d85ed0` | 501 explícito al exportar tipos dinámicos (hueco honesto de S-E) |
+| (este) | Cierre: `AI_HANDOFF.md` + status |
+
+### Template Studio — qué quedó construido
+
+**Dominio y persistencia**
+- `src/core/models/template_dinamico.py`: `TemplateDinamico`, `SeccionCatalogoDinamica`
+  (superset deliberado de los catálogos MRM y Prophet), `ResultadoLint`, `HallazgoLint`.
+- Tabla nueva `templates_dinamicos` (creación aditiva pura vía `create_all`, sin tocar
+  `_aplicar_migraciones_aditivas`) + `TemplateDinamicoRepository`.
+- `src/core/template_registry.py`: `resolver_template(tipo)` unifica congelados y dinámicos.
+  **MRM y Prophet no se tocaron** — el registro los envuelve al vuelo.
+- `src/core/rules/template_lint.py`: checks L1-L9 (6 errores bloqueantes + 3 advertencias),
+  lógica pura sin BD ni LLM.
+- `src/core/usecases/template_studio.py`: crear / actualizar / lint / publicar / retirar /
+  versionar / borrar, todo con audit trail. Publicar exige lint sin errores y retira
+  automáticamente la versión anterior del mismo slug.
+
+**LLM**
+- `extraer_estructura_template.py`: esqueleto del .docx con python-docx, determinístico.
+- `proponer_catalogo.py` + `src/llm/prompts/proponer_catalogo.py`: las 7 reglas AI-ready
+  como system prompt; el .docx subido se trata como DATOS, nunca como instrucciones;
+  tolerante a JSON malformado.
+
+**API**
+- `/studio/*` — 11 endpoints con `RequireAdmin` (`DOCUMENTE_ADMIN_TOKEN`, puente pre-Cognito).
+- `GET /templates` ahora resuelve por registro → los dinámicos publicados aparecen solos en
+  "Crear documento". Nuevo `GET /templates/{tipo}/catalogo` genérico.
+- `POST /documentos` acepta tipos dinámicos; 404 si no está registrado.
+
+**Cambio no-aditivo previsto en spec §6.3:** `Documento.tipo` pasó de `Literal` a `str`,
+validado contra el registro en el use case (no en el modelo — un doc de template retirado
+debe seguir deserializando). Sin cambio de esquema: la columna ya era `String(32)`.
+
+### Pendiente del Studio (deliberado, con consecuencia honesta)
+
+| Sesión | Falta | Consecuencia hoy |
+|---|---|---|
+| **S-C** | UI del wizard de 5 pasos | El Studio solo se usa por API |
+| **S-E** | Plantilla Word genérica + `DocxWriterGenerico` | **Exportar un doc de tipo dinámico devuelve 501 deliberado** — mejor error claro que .docx incoherente |
+| S-D.2 | Capa 2 del lint (dry-run con LLM) | Solo corre la capa determinística |
+| S-F/S-G | Fase 2 (usuarios proponen, admin aprueba) | Studio es admin-only |
+
+### P1 de la auditoría visual (12/12, vía Codex)
+
+Tokens `text-2xs`/`3xs` + `.eyebrow`; cero hex hardcodeado; `duration-400` inválida →
+`duration-500`; **Select shadcn** reemplaza los `<select>` nativos (0 restantes);
+**AlertDialog** reemplaza el `confirm()` del navegador; **ErrorState en 8 páginas** (un error
+de API ya no se pinta como "no hay datos" — era grave en la pantalla de auditoría MRM);
+Textarea vuelve a `font-body`; onboarding hidrata con `useEffect` + flag; empty states con
+CTA; importar con progreso por etapas honesto (**no** se simuló SSE: el backend no lo expone,
+queda anotado); brand-logo con la decisión de marca documentada.
+
+### Blueprint corporativo
+
+- **`docs/AI_HANDOFF.md`** — instructivo escrito *para ser leído por una IA* (ChatGPT/Codex/
+  Claude) que continúe el proyecto en la instancia corporativa. Cubre: reglas para el
+  asistente, arquitectura en 30 segundos, **puntos de parametrización** (rebrand, env vars,
+  swap de proveedor LLM), estado real con lo pendiente, **10 invariantes no-negociables**,
+  comandos de verificación con cifras de referencia, montaje desde cero, trampas conocidas y
+  mapa de archivos. Lenguaje llano, sin jerga innecesaria.
+
+### Calidad
+
+- **pytest: 584 pass** (de 516 en S18; +68). 0 fallos.
+- `ruff check` + `format` limpios. `mypy`: 42 errores (= baseline, sin errores nuevos).
+- Frontend: `tsc --noEmit` limpio, ESLint limpio, `npm run build` 19 rutas.
+- **Playwright: 7/7** en ~50s.
+
+### Aprendizajes operativos
+
+1. **Codex vía plugin funciona bien para trabajo de frontend acotado** y ahorra créditos de
+   Claude. Patrón: darle la auditoría como fuente de verdad + lista explícita de qué YA está
+   hecho para que no duplique + exigir las 3 validaciones en su reporte.
+2. Un subagente puede morir a media tarea (créditos). **Siempre verificar el árbol de
+   trabajo** antes de continuar: en este caso el estado parcial compilaba, pero podría no
+   haber sido así.
+3. `git archive` desde `main` genera el ZIP corporativo limpio (solo trackeados; sin `.env`,
+   `SMNYL/`, `data/`, `node_modules` ni docs personales) — verificado programáticamente.
+
+---
+
+## Lo que sigue — sesión 20
+
+### Decisión pendiente de Alberto
+
+**Mudarse a la instancia corporativa o seguir aquí.** Ya está todo listo para mudarse
+(`AI_HANDOFF.md` + ZIP reproducible con `git archive`). Riesgo a evitar: desarrollar en
+ambos lados sin regla de sincronía. Recomendación dada: si el proyecto ya es institucional,
+mudarlo y dejar las sesiones aquí para diseño/specs/revisión.
+
+### Candidatos técnicos
+
+1. **S-C: UI del wizard del Studio** — el backend ya expone todo; falta solo la pantalla.
+2. **S-E: plantilla Word genérica + writer** — quita el 501. Incluye diseño manual en Word.
+3. **Sunset Streamlit** (−29% del Python): confirmar que nadie usa :8052; rescatar tokens de
+   `theme.py` primero.
+4. **Mini-eval Claude 5** → swap de modelos (Opus 5 al mismo precio que Opus 4.7) +
+   actualizar `src/llm/pricing.py` (hoy solo conoce modelos 4.x → reportaría costo $0).
+5. P2 de la auditoría visual (9 ítems) + limpieza de los 42 avisos de mypy.
+6. Endpoint SSE para importar (hoy solo `/crear-con-fuentes` tiene stream).
