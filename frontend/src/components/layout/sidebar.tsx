@@ -18,17 +18,21 @@ import {
   HelpCircle,
 } from "lucide-react";
 
+import { useQuery } from "@tanstack/react-query";
+
 import { cn } from "@/lib/utils";
+import { healthApi } from "@/lib/api/client";
 import { BrandLogo } from "@/components/layout/brand-logo";
 
-interface NavItem {
+export interface NavItem {
   label: string;
   href: string;
   icon: React.ComponentType<{ className?: string }>;
   badge?: string;
 }
 
-const NAV_PRIMARY: NavItem[] = [
+// Exportados para que MobileNav (drawer <1024px) use exactamente la misma nav.
+export const NAV_PRIMARY: NavItem[] = [
   // "Inicio" lista todos los documentos — no duplicamos con "/documentos"
   // "Auditoría" es contextual a un documento (vive en /documentos/[id]/auditoria),
   // no tiene sentido como item global del sidebar
@@ -38,7 +42,7 @@ const NAV_PRIMARY: NavItem[] = [
   { label: "Ficha Prophet", href: "/prophet", icon: Sparkles, badge: "Beta" },
 ];
 
-const NAV_SECONDARY: NavItem[] = [
+export const NAV_SECONDARY: NavItem[] = [
   { label: "Configuración", href: "/configuracion", icon: Settings },
   { label: "Ayuda", href: "/ayuda", icon: HelpCircle },
 ];
@@ -77,7 +81,7 @@ export function Sidebar() {
   );
 }
 
-function SidebarItem({ item, active }: { item: NavItem; active: boolean }) {
+export function SidebarItem({ item, active }: { item: NavItem; active: boolean }) {
   const Icon = item.icon;
   return (
     <Link
@@ -108,16 +112,35 @@ function SidebarItem({ item, active }: { item: NavItem; active: boolean }) {
   );
 }
 
-function APIStatus() {
-  // Simple status — el sidebar se rerendera cuando cambie el flag global de
-  // conexión. Por ahora hardcoded "Conectado".
+export function APIStatus() {
+  // Health check real contra el backend — misma queryKey que /configuracion,
+  // así comparten cache y un solo polling cada 30s alimenta a ambos.
+  const health = useQuery({
+    queryKey: ["health"],
+    queryFn: healthApi.ok,
+    refetchInterval: 30_000,
+    retry: 1,
+  });
+
+  const estado = health.isPending
+    ? { dot: "bg-smnyl-text-muted", ping: false, label: "Verificando API…" }
+    : health.isError
+      ? { dot: "bg-smnyl-danger", ping: false, label: "API sin conexión" }
+      : { dot: "bg-smnyl-success", ping: true, label: "API conectada" };
+
   return (
-    <div className="flex items-center gap-2 text-[0.7rem] text-smnyl-text-muted">
+    <div
+      className="flex items-center gap-2 text-[0.7rem] text-smnyl-text-muted"
+      role="status"
+      aria-live="polite"
+    >
       <span className="relative flex h-2 w-2">
-        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-smnyl-success/60 opacity-50" />
-        <span className="relative inline-flex h-2 w-2 rounded-full bg-smnyl-success" />
+        {estado.ping && (
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-smnyl-success/60 opacity-50" />
+        )}
+        <span className={cn("relative inline-flex h-2 w-2 rounded-full", estado.dot)} />
       </span>
-      <span>API conectada</span>
+      <span>{estado.label}</span>
     </div>
   );
 }

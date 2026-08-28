@@ -52,6 +52,16 @@ export default defineConfig({
       timeout: 60_000,
       stdout: "pipe",
       stderr: "pipe",
+      env: {
+        // Hermético: string vacío hace que pydantic-settings ignore el
+        // `.env` real de la máquina → get_llm_client devuelve None y los
+        // specs de degradación (llm-fallback) son deterministas en
+        // cualquier máquina. Mismo principio que la fixture sin_llm de
+        // tests/integration/test_api_smoke.py.
+        ANTHROPIC_API_KEY: "",
+        // BD dedicada del E2E — antes escribía en data/documente.db del dev.
+        DATABASE_URL: `sqlite:///${PROJECT_ROOT.replace(/\\/g, "/")}/data/e2e.db`,
+      },
     },
     {
       // -p fuerza el puerto. Sin esto Next.js cae a 3001/3002/...

@@ -288,7 +288,7 @@ export default function CrearDocumentoPage() {
                   type="checkbox"
                   checked={describirImagenes}
                   onChange={(e) => setDescribirImagenes(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 rounded border-smnyl-border text-smnyl-primary focus:ring-smnyl-primary"
+                  className="mt-0.5 h-4 w-4 accent-smnyl-primary"
                 />
                 <span className="text-xs text-smnyl-text-muted leading-relaxed">
                   <span className="font-medium text-smnyl-text">

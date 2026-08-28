@@ -186,7 +186,7 @@ export default function EditarMetadataPage() {
             <Label>Inherent risk tier</Label>
             <select
               className="
-                flex h-10 w-full rounded-md border border-smnyl-border bg-white px-3 text-sm
+                flex h-10 w-full rounded-md border border-smnyl-border-input bg-white px-3 text-sm
                 transition-all duration-200 ease-out
                 focus-visible:outline-none focus-visible:border-smnyl-primary
                 focus-visible:ring-2 focus-visible:ring-smnyl-primary/15
