@@ -23,7 +23,11 @@ from src.core.models.memoria import MemoriaModelo
 from src.core.models.metricas import MetricasUso
 from src.core.models.seccion import Seccion
 
-TipoDocumento = Literal["model_development", "prophet"]
+# S19 (Template Studio): deja de ser Literal cerrado — los templates dinámicos
+# aportan tipos nuevos en runtime. La validación de "tipo registrado" vive en
+# los use cases de creación (contra template_registry), NO aquí: el modelo debe
+# poder deserializar documentos cuyo template ya fue retirado.
+TipoDocumento = str
 EstadoDocumento = Literal["draft", "in_review", "approved", "published", "retired"]
 EstadoVisibilidad = Literal["activo", "archivado", "papelera"]
 TierRiesgo = Literal[

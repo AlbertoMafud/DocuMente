@@ -9,7 +9,7 @@ Endpoints:
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from src.api.auth import CurrentUser
@@ -60,18 +60,43 @@ def _cat_to_dto(s: SeccionCatalogo | SeccionCatalogoProphet) -> _SeccionCatalogo
 
 @router.get("", response_model=list[_TemplateInfo])
 def listar_templates(user: CurrentUser) -> list[_TemplateInfo]:
-    """Lista los tipos de template disponibles."""
+    """Lista los tipos de template disponibles para crear documentos.
+
+    Resuelve por el registro: incluye los congelados (MRM, Prophet) y los
+    dinámicos publicados en el Template Studio — la UI de "Crear documento"
+    se vuelve dinámica sin cambios adicionales.
+    """
+    from src.core.template_registry import listar_templates as _listar_specs
+
     return [
-        _TemplateInfo(
-            tipo="model_development",
-            nombre="NYL Model Development Template",
-            n_secciones=len(TEMPLATE_MODEL_DEVELOPMENT),
-        ),
-        _TemplateInfo(
-            tipo="prophet",
-            nombre="Ficha Prophet",
-            n_secciones=len(TEMPLATE_PROPHET),
-        ),
+        _TemplateInfo(tipo=spec.id, nombre=spec.nombre, n_secciones=len(spec.catalogo))
+        for spec in _listar_specs()
+    ]
+
+
+@router.get("/{tipo}/catalogo", response_model=list[_SeccionCatalogoDTO])
+def listar_secciones_de_tipo(tipo: str, user: CurrentUser) -> list[_SeccionCatalogoDTO]:
+    """Catálogo de cualquier tipo registrado (congelado o dinámico).
+
+    Genérico vía registro. Los paths /mrm/... y /prophet/... se conservan por
+    compatibilidad con el frontend actual.
+    """
+    from src.core.template_registry import TemplateDesconocidoError, resolver_template
+
+    try:
+        spec = resolver_template(tipo)
+    except TemplateDesconocidoError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return [
+        _SeccionCatalogoDTO(
+            id=s.id,
+            nombre=s.nombre,
+            numero=s.numero,
+            obligatoria=s.obligatoria,
+            intencion=s.intencion,
+            preguntas_guia=list(s.preguntas_guia),
+        )
+        for s in spec.catalogo
     ]
 
 

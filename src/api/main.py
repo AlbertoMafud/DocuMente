@@ -29,6 +29,7 @@ from src.api.routers import (
     importar,
     prophet,
     secciones,
+    studio,
     templates,
     versiones,
 )
@@ -74,6 +75,7 @@ install_exception_handlers(app)
 # (los más específicos primero, los más generales después).
 app.include_router(health.router)
 app.include_router(templates.router)
+app.include_router(studio.router)  # /studio/... (Template Studio)
 app.include_router(secciones.catalog_router)  # /catalogos/...
 app.include_router(prophet.router)
 app.include_router(importar.router)  # /documentos/importar (POST)

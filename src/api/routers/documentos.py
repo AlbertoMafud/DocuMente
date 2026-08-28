@@ -103,8 +103,46 @@ def crear_documento(
 
     - `tipo=model_development` usa el catálogo NYL Model Development.
     - `tipo=prophet` usa el catálogo Prophet.
+    - cualquier otro `tipo` se resuelve contra el registro de templates
+      (dinámicos publicados en el Template Studio); si no existe → 404.
     """
     actor = payload.actor or user
+
+    if payload.tipo not in ("model_development", "prophet"):
+        # Template dinámico: el documento COPIA la estructura del catálogo al
+        # nacer, por eso retirar el template después no rompe este documento.
+        from src.core.models import Documento
+        from src.core.models.documento import MetadataModelo
+        from src.core.template_registry import (
+            TemplateDesconocidoError,
+            construir_secciones_desde_spec,
+            resolver_template,
+        )
+
+        try:
+            spec = resolver_template(payload.tipo)
+        except TemplateDesconocidoError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+        nombre = payload.nombre_modelo.strip() or f"{spec.nombre} sin nombre"
+        documento = Documento(
+            user_id=actor,
+            tipo=spec.id,
+            metadata_modelo=MetadataModelo(nombre_modelo=nombre),
+            secciones=construir_secciones_desde_spec(spec),
+        )
+        documento.registrar_evento(
+            EventoAuditoria(
+                timestamp=datetime.now(UTC),
+                actor=actor,
+                tipo="documento_creado",
+                descripcion=f"Documento creado con template '{spec.nombre}': {nombre}",
+                metadata={"tipo": spec.id, "template_version": str(spec.version)},
+            )
+        )
+        repo.guardar(documento)
+        return DocumentoDTO.from_domain(documento)
+
     if payload.tipo == "prophet":
         # Prophet usa template propio — generamos sin el use case MRM.
         from src.core.models import Documento

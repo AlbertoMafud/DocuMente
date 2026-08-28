@@ -33,6 +33,19 @@ TipoEvento = Literal[
     # Versionado (Fase C.2):
     "version_creada",
     "version_restaurada",
+    # Template Studio (S19) — ciclo de vida de templates dinámicos.
+    # Extensión aditiva: documentos persistidos previos siguen deserializando.
+    "template_creado",
+    "template_extraido",
+    "catalogo_propuesto_llm",
+    "seccion_catalogo_editada",
+    "lint_ejecutado",
+    "advertencias_aceptadas",
+    "template_propuesto",
+    "template_devuelto",
+    "template_publicado",
+    "template_retirado",
+    "nueva_version_creada",
 ]
 
 

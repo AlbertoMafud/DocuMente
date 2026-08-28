@@ -20,9 +20,11 @@ from uuid import UUID
 from sqlalchemy import select
 
 from src.core.models import Documento, EstadoEntrevista, Version
+from src.core.models.template_dinamico import TemplateDinamico
 from src.storage.db import (
     DocumentoRow,
     EstadoEntrevistaRow,
+    TemplateDinamicoRow,
     VersionRow,
     session_scope,
 )
@@ -278,3 +280,95 @@ class VersionRepository:
                 comentario=row.comentario,
                 creado_en=row.creado_en,
             )
+
+
+class TemplateDinamicoRepository:
+    """Persistencia de templates dinámicos del Template Studio (S19).
+
+    Calcado de `DocumentoRepository`: payload JSON completo + columnas
+    planas para filtrar. Las reglas de negocio (transiciones, lint
+    bloqueante) viven en los use cases, no aquí.
+    """
+
+    def guardar(self, template: TemplateDinamico) -> None:
+        """Inserta o actualiza un TemplateDinamico."""
+        template.actualizado_en = datetime.now(UTC)
+        payload = template.model_dump_json()
+        with session_scope() as s:
+            row = s.get(TemplateDinamicoRow, str(template.id))
+            if row is None:
+                s.add(
+                    TemplateDinamicoRow(
+                        id=str(template.id),
+                        slug=template.slug,
+                        nombre=template.nombre,
+                        estado=template.estado,
+                        version=template.version,
+                        creado_por=template.creado_por,
+                        payload_json=payload,
+                        creado_en=template.creado_en,
+                        actualizado_en=template.actualizado_en,
+                    )
+                )
+            else:
+                row.slug = template.slug
+                row.nombre = template.nombre
+                row.estado = template.estado
+                row.version = template.version
+                row.creado_por = template.creado_por
+                row.payload_json = payload
+                row.actualizado_en = template.actualizado_en
+
+    def obtener(self, template_id: UUID) -> TemplateDinamico | None:
+        with session_scope() as s:
+            row = s.get(TemplateDinamicoRow, str(template_id))
+            if row is None:
+                return None
+            return TemplateDinamico.model_validate_json(row.payload_json)
+
+    def listar(
+        self,
+        *,
+        estado: str | None = None,
+        creado_por: str | None = None,
+    ) -> list[TemplateDinamico]:
+        """Lista templates, más reciente primero. Filtros opcionales."""
+        with session_scope() as s:
+            stmt = select(TemplateDinamicoRow).order_by(TemplateDinamicoRow.actualizado_en.desc())
+            if estado is not None:
+                stmt = stmt.where(TemplateDinamicoRow.estado == estado)
+            if creado_por is not None:
+                stmt = stmt.where(TemplateDinamicoRow.creado_por == creado_por)
+            rows = s.execute(stmt).scalars().all()
+            return [TemplateDinamico.model_validate_json(r.payload_json) for r in rows]
+
+    def obtener_publicado_por_slug(self, slug: str) -> TemplateDinamico | None:
+        """Devuelve el template PUBLICADO con ese slug (a lo más uno).
+
+        La unicidad de slug publicado la garantiza el use case de publicación
+        (retira la versión anterior en la misma operación); aquí se toma el
+        más reciente por robustez.
+        """
+        with session_scope() as s:
+            stmt = (
+                select(TemplateDinamicoRow)
+                .where(
+                    TemplateDinamicoRow.slug == slug,
+                    TemplateDinamicoRow.estado == "publicado",
+                )
+                .order_by(TemplateDinamicoRow.version.desc())
+                .limit(1)
+            )
+            row = s.execute(stmt).scalar_one_or_none()
+            if row is None:
+                return None
+            return TemplateDinamico.model_validate_json(row.payload_json)
+
+    def borrar(self, template_id: UUID) -> bool:
+        """Borra el template. Solo los use cases deciden cuándo es legal."""
+        with session_scope() as s:
+            row = s.get(TemplateDinamicoRow, str(template_id))
+            if row is None:
+                return False
+            s.delete(row)
+            return True

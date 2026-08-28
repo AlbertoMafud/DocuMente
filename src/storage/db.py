@@ -89,6 +89,27 @@ class EstadoEntrevistaRow(Base):
     actualizada_en: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
 
 
+class TemplateDinamicoRow(Base):
+    """Tabla de templates dinámicos del Template Studio (S19).
+
+    Mismo patrón que `documentos`: el Pydantic completo serializado a JSON,
+    columnas planas solo para filtrar/listar. Creación 100% aditiva vía
+    `Base.metadata.create_all` — sin entrada en migraciones.
+    """
+
+    __tablename__ = "templates_dinamicos"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    slug: Mapped[str] = mapped_column(String(64), index=True)
+    nombre: Mapped[str] = mapped_column(String(256), default="")
+    estado: Mapped[str] = mapped_column(String(32), index=True, default="borrador")
+    version: Mapped[int] = mapped_column(default=1)
+    creado_por: Mapped[str] = mapped_column(String(64), index=True, default="default")
+    payload_json: Mapped[str] = mapped_column(Text, nullable=False)
+    creado_en: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
+    actualizado_en: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
+
+
 class VersionRow(Base):
     """Tabla de versiones (snapshots inmutables del Documento) — Fase C.2."""
 

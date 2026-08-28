@@ -56,3 +56,39 @@ def require_auth(
 
 
 CurrentUser = Annotated[str, Depends(require_auth)]
+
+
+def _expected_admin_token() -> str | None:
+    """Token de admin del Template Studio. None si no está configurado."""
+    raw = os.environ.get("DOCUMENTE_ADMIN_TOKEN", "").strip()
+    return raw or None
+
+
+def require_admin(
+    creds: Annotated[HTTPAuthorizationCredentials | None, Depends(_security)],
+) -> str:
+    """Exige el token de admin (Template Studio, Fase 1).
+
+    Puente pre-Cognito, mismo espíritu que `require_auth`: si la env var
+    DOCUMENTE_ADMIN_TOKEN no está definida, modo dev single-user → todos son
+    admin. Cuando llegue Cognito (A.1.c), esta dependencia pasa a leer el
+    grupo/claim del JWT — el swap es solo este archivo.
+    """
+    expected = _expected_admin_token()
+    if expected is None:
+        return "default"
+    if creds is None or creds.scheme.lower() != "bearer":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token de administrador requerido",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    if not secrets.compare_digest(creds.credentials, expected):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Se requiere rol de administrador para esta operación",
+        )
+    return "default"
+
+
+RequireAdmin = Annotated[str, Depends(require_admin)]

@@ -15,6 +15,14 @@ from src.core.models.fuente_contexto import FuenteContexto, TipoFuente
 from src.core.models.memoria import MemoriaModelo
 from src.core.models.metricas import LlamadaLLM, MetricasUso
 from src.core.models.seccion import Completitud, Seccion
+from src.core.models.template_dinamico import (
+    EstadoTemplate,
+    HallazgoLint,
+    ResultadoLint,
+    SeccionCatalogoDinamica,
+    TemplateDinamico,
+    TipoContenido,
+)
 from src.core.models.version import Version, calcular_hash
 
 __all__ = [
@@ -24,19 +32,25 @@ __all__ = [
     "Documento",
     "EstadoDocumento",
     "EstadoEntrevista",
+    "EstadoTemplate",
     "EventoAuditoria",
     "FuenteContexto",
+    "HallazgoLint",
     "LlamadaLLM",
     "MemoriaModelo",
     "MensajeEntrevista",
     "MetadataModelo",
     "MetricasUso",
+    "ResultadoLint",
     "RolMensaje",
     "Seccion",
+    "SeccionCatalogoDinamica",
     "Severidad",
+    "TemplateDinamico",
     "TierRiesgo",
     "TipoApendice",
     "TipoBrecha",
+    "TipoContenido",
     "TipoDocumento",
     "TipoEvento",
     "TipoFuente",
