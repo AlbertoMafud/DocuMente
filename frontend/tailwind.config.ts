@@ -66,6 +66,9 @@ const config: Config = {
           text: "#0a3c53",
           "text-muted": "#565656",
           border: "#bdc1c2",
+          // Border de controles de formulario — cumple WCAG 1.4.11 (≥3:1
+          // sobre blanco). El border general #bdc1c2 queda para divisores.
+          "border-input": "#8a9194",
           success: "#4b8b7f",
           "success-dark": "#264640",
           "success-soft": "#e8f0ee",

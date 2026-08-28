@@ -2,7 +2,7 @@
 
 > Estado vivo del proyecto. Se lee al iniciar sesión y se actualiza al cerrar si hubo cambios significativos.
 
-**Última actualización:** 2026-05-20 (sesión 17 — paralelización LLM + streaming SSE: latencia ~10 min → ~1-2 min y barra de progreso en vivo en lugar de pantalla en blanco. **5 commits S17 sobre S16.** Tests: 439 unit + 7 E2E.)
+**Última actualización:** 2026-08-28 (sesión 18 — revisita de arquitectura post-merge + ejecución paralela: quick wins P0/P1, specs Template Studio, auditoría visual React y sus 6 P0 aplicados. **4 commits en `claude/s18-revisita`**, pusheado. Tests: 516/516 Python + 7/7 E2E.)
 
 ---
 
@@ -1223,3 +1223,64 @@ Plus `helpers.ts` con `crearDocumentoMRM()` y `logHttpErrors()` compartidos, y `
 4. Schema migrations SOLO aditivas, idempotentes al boot.
 5. NUNCA borrar el avance del usuario. Backup antes de cambios arriesgados a BD.
 6. **Cualquier worktree nuevo se hace fast-forward al branch padre al cierre** (S15 aprendido — evita acumular branches huérfanos).
+
+---
+
+## Progreso de sesión 18 (2026-08-28) — revisita de arquitectura + ejecución paralela
+
+Contexto: varios meses post-merge del PR #1 a `main`. Feedback de usuarios positivo, con
+2 pedidos: más templates para otros tipos de documento y clasificación automática de riesgo.
+Alberto pidió revisita a profundidad; luego aprobó ejecutar en paralelo con subagentes.
+
+### Revisita (verificada contra código y suite, no de memoria)
+
+- Reporte completo como artifact: "Revisita DocuMente" (hallazgos P0-P2, quick wins, no-tocar).
+- Estado encontrado: 514/516 tests (2 fallos por fuga del `.env` real), mypy 48 errores,
+  detached HEAD, Python 3.14.3 real vs `<3.13` declarado, `anthropic>=0.50.0` sin tope
+  (el SDK 1.x ya existe con breaking changes — riesgo de deploy EC2), bug `DATABASE_URL`
+  vivo desde S16, `structlog` jamás importado, Streamlit legacy = 29% del Python sin uso.
+
+### Ejecutado (4 commits en `claude/s18-revisita`, pusheado)
+
+| Commit | Qué |
+|---|---|
+| `44ffd41` | Quick wins: pin `anthropic>=0.50.0,<1`, `DATABASE_URL` respeta `.env`, fixture `sin_llm` (516/516), `secrets.compare_digest`, `requires-python <3.15`, structlog fuera, mypy 48→42 |
+| `8b7a83f` | `docs/TEMPLATE_STUDIO_SPEC.md` + `docs/TEMPLATE_AIREADY_RULES.md` (7 reglas + checklist) |
+| `f77b913` | `docs/AUDITORIA_VISUAL_REACT.md` — 27 hallazgos (6 P0 · 12 P1 · 9 P2) + design_tokens.json propuesto + tabla de rebrand |
+| `c2d3c4c` | 6 P0 aplicados: token `border-input` AA, checkboxes `accent-`, MobileNav <1024px, breadcrumb dinámico, health check real en sidebar, botones muertos fuera. E2E hermético (`ANTHROPIC_API_KEY=""` + `data/e2e.db`). tsc/ESLint/build clean, Playwright 7/7 |
+
+### Higiene git
+
+- 4 branches locales mergeados borrados; worktrees huérfanos eliminados (0 restantes).
+- Remotos borrados: `claude/affectionate-noether-8e038f`, `feat/remediacion-s13-s16`.
+- Quedan: `main` + `claude/s18-revisita` (PR pendiente de abrir por Alberto).
+
+### Decisiones de producto (S18)
+
+1. **Templates nuevos NUNCA crudos**: Template Studio en 2 fases — fase 1 admin-only asistida
+   por LLM, fase 2 usuarios proponen + admin aprueba. Catálogos dinámicos como DATOS en BD
+   (template nuevo ≠ migración de código). Spec lista para reacción de Alberto.
+2. **Clasificador de tier**: matriz Anchor Rating determinística en `rules/` + LLM solo
+   extrae Materiality/Criticality citando el doc; humano confirma siempre. (Diseñado, no construido.)
+3. **Blueprint corporativo**: todo debe poder replicarse en la cuenta corporativa por otra IA —
+   `AI_HANDOFF.md` diferido a propósito hasta que existan los design tokens (evitar retrabajo).
+4. **Claude 5 disponible**: Opus 5 mismo precio que Opus 4.7. Swap pendiente de mini-eval
+   (5-10 docs). Actualizar `pricing.py` al hacerlo. Bedrock futuro: cliente `AnthropicBedrockMantle`.
+
+### Lo que sigue — sesión 19 (candidatos)
+
+1. Alberto: abrir PR de `claude/s18-revisita` → main y mergear.
+2. P1 de la auditoría visual (12 ítems, ~2-3 días) o arrancar Template Studio fase 1 (spec lista).
+3. Sunset Streamlit (−29% Python): confirmar con testers que nadie usa :8052; rescatar tokens
+   de `theme.py` antes de borrar.
+4. Mini-eval Claude 5 → swap de modelos + pricing.
+5. `AI_HANDOFF.md` post-tokens (insumo ya listo en la tabla de rebrand de la auditoría).
+6. Mypy: 42 errores restantes (sesión corta de limpieza o ajustar la regla del workflow).
+
+### Reglas de oro vigentes (actualizadas)
+
+- `main` ya NO está congelada (PR #1 mergeado). Trabajo nuevo en branches `claude/*` + PR.
+- TDD obligatorio. **Baseline S18 = 516 unit/integration + 7 E2E Playwright.**
+- Schema migrations solo aditivas. Backup antes de cambios arriesgados a BD.
+- NO cambiar tier LLM sin eval. Catálogo MRM de 28 secciones sigue congelado.
+- Templates dinámicos (cuando existan) viven en BD, no en código.

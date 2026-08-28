@@ -31,9 +31,7 @@ def install_exception_handlers(app):  # type: ignore[no-untyped-def]
         )
 
     @app.exception_handler(TransicionRechazada)
-    async def _transicion_rechazada(
-        request: Request, exc: TransicionRechazada
-    ) -> JSONResponse:
+    async def _transicion_rechazada(request: Request, exc: TransicionRechazada) -> JSONResponse:
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
             content={

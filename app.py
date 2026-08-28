@@ -107,7 +107,7 @@ def _render_undo_banner(repo: DocumentoRepository, user_id: str) -> None:
                     archivar_uc.desarchivar(doc_uuid, actor=user_id)
                 else:
                     archivar_uc.restaurar_de_papelera(doc_uuid, actor=user_id)
-                st.toast(f"\"{nombre}\" restaurado.", icon=":material/undo:")
+                st.toast(f'"{nombre}" restaurado.', icon=":material/undo:")
             except Exception as e:
                 st.error(f"No se pudo deshacer: {e}")
             del st.session_state["undo_visibilidad"]
@@ -334,7 +334,7 @@ def _render_lista_documentos(repo: DocumentoRepository, user_id: str, *, modo: s
                     ):
                         archivar_uc.archivar(doc.id, actor=user_id)
                         _set_undo_visibilidad(tipo="archivar", doc_id=doc.id, nombre=nombre)
-                        st.toast(f"\"{nombre}\" archivado.", icon=":material/archive:")
+                        st.toast(f'"{nombre}" archivado.', icon=":material/archive:")
                         st.rerun()
                 with col_pap:
                     if st.button(
@@ -346,7 +346,7 @@ def _render_lista_documentos(repo: DocumentoRepository, user_id: str, *, modo: s
                     ):
                         archivar_uc.enviar_a_papelera(doc.id, actor=user_id)
                         _set_undo_visibilidad(tipo="papelera", doc_id=doc.id, nombre=nombre)
-                        st.toast(f"\"{nombre}\" movido a papelera.", icon=":material/delete:")
+                        st.toast(f'"{nombre}" movido a papelera.', icon=":material/delete:")
                         st.rerun()
             elif modo == "papelera":
                 # Indicar días restantes hasta auto-purge

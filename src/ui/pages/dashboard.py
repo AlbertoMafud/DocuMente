@@ -445,22 +445,22 @@ def _render_resumen(documento: Documento, brechas: list[Brecha]) -> None:
             st.markdown(
                 f"""
                 <div style="
-                    border: 1px solid {c['border']};
+                    border: 1px solid {c["border"]};
                     border-left: 3px solid {accent};
                     border-radius: 10px;
                     padding: 12px 16px;
-                    background: {c['bg']};
+                    background: {c["bg"]};
                     box-shadow: var(--shadow-sm);
                     height: 100%;
                 ">
-                    <div style="font-size: 0.68rem; color: {c['text_muted']};
+                    <div style="font-size: 0.68rem; color: {c["text_muted"]};
                         text-transform: uppercase; letter-spacing: 0.07em;
                         font-weight: 600; margin-bottom: 4px;">{label}</div>
                     <div style="font-family: var(--font-display);
-                        font-size: 1.65rem; font-weight: 600; color: {c['text']};
+                        font-size: 1.65rem; font-weight: 600; color: {c["text"]};
                         line-height: 1.1;">{value}</div>
                     {progress_html}
-                    <div style="font-size: 0.78rem; color: {c['text_muted']};
+                    <div style="font-size: 0.78rem; color: {c["text_muted"]};
                         margin-top: 6px; line-height: 1.3;">{sub}</div>
                 </div>
                 """,
@@ -878,9 +878,7 @@ _SEVERIDAD_LABELS: dict[str, tuple[str, str, str]] = {
 }
 
 
-def _render_brechas_agrupadas(
-    brechas: list[Brecha], text_color: str, muted_color: str
-) -> None:
+def _render_brechas_agrupadas(brechas: list[Brecha], text_color: str, muted_color: str) -> None:
     """Renderiza las brechas en 3 expanders por severidad — el primer grupo
     no vacío arranca expandido para guiar la atención (goal-gradient).
 
