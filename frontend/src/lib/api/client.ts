@@ -20,11 +20,17 @@ import type {
   DocumentoListItem,
   EditarMetadataRequest,
   EstadoDocumento,
+  EstadoTemplate,
   EventoAuditoria,
+  Extraccion,
   IniciarEntrevistaResponse,
+  ResultadoLint,
   RolSignoff,
   Seccion,
+  SeccionCatalogoDinamica,
+  TemplateDinamico,
   TemplateInfo,
+  TemplateListItem,
   TurnoEntrevista,
   Version,
   Visibilidad,
@@ -456,3 +462,77 @@ export const healthApi = {
 };
 
 export { API_URL };
+
+// ===== Template Studio =====
+
+export const studioApi = {
+  extraer: (archivo: File, nombre: string, descripcion: string) => {
+    const fd = new FormData();
+    fd.append("archivo", archivo);
+    fd.append("nombre", nombre);
+    fd.append("descripcion", descripcion);
+    return request<Extraccion>(`/studio/templates/extraer`, {
+      method: "POST",
+      body: fd,
+    });
+  },
+
+  crear: (payload: {
+    nombre: string;
+    descripcion?: string;
+    area_duena?: string;
+    slug?: string | null;
+    archivo_origen?: string | null;
+    secciones: SeccionCatalogoDinamica[];
+  }) =>
+    request<TemplateDinamico>(`/studio/templates`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  listar: (estado?: EstadoTemplate) =>
+    request<TemplateListItem[]>(
+      `/studio/templates${estado ? `?estado=${estado}` : ""}`,
+    ),
+
+  obtener: (id: string) => request<TemplateDinamico>(`/studio/templates/${id}`),
+
+  actualizarMetadata: (
+    id: string,
+    payload: { nombre?: string; descripcion?: string; area_duena?: string },
+  ) =>
+    request<TemplateDinamico>(`/studio/templates/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+
+  actualizarSecciones: (id: string, secciones: SeccionCatalogoDinamica[]) =>
+    request<TemplateDinamico>(`/studio/templates/${id}/secciones`, {
+      method: "PUT",
+      body: JSON.stringify({ secciones }),
+    }),
+
+  lint: (id: string) =>
+    request<ResultadoLint>(`/studio/templates/${id}/lint`, { method: "POST" }),
+
+  transicionar: (
+    id: string,
+    accion: "publicar" | "retirar",
+    aceptarAdvertencias = false,
+  ) =>
+    request<TemplateDinamico>(`/studio/templates/${id}/estado`, {
+      method: "POST",
+      body: JSON.stringify({
+        accion,
+        aceptar_advertencias: aceptarAdvertencias,
+      }),
+    }),
+
+  nuevaVersion: (id: string) =>
+    request<TemplateDinamico>(`/studio/templates/${id}/nueva-version`, {
+      method: "POST",
+    }),
+
+  borrar: (id: string) =>
+    request<void>(`/studio/templates/${id}`, { method: "DELETE" }),
+};

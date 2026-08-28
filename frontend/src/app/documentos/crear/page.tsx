@@ -15,7 +15,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, FileText, Sparkles, Loader2, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, FileText, Layers, Sparkles, Loader2, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 
 import type { TipoDocumento } from "@/lib/api/types";
@@ -26,7 +26,7 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { DropZone } from "@/components/upload/dropzone";
 import { documentosApi } from "@/lib/api/client";
-import { useCrearDocumento } from "@/lib/api/hooks";
+import { useCrearDocumento, useTemplatesDisponibles } from "@/lib/api/hooks";
 
 const FUENTES_ACCEPT = ".pdf,.docx,.xlsx,.xls,.csv,.txt";
 
@@ -49,6 +49,7 @@ interface ProgressState {
 export default function CrearDocumentoPage() {
   const router = useRouter();
   const [tipo, setTipo] = useState<TipoDocumento>("model_development");
+  const templates = useTemplatesDisponibles();
   const [nombre, setNombre] = useState("");
   const [fuentes, setFuentes] = useState<File[]>([]);
   const [describirImagenes, setDescribirImagenes] = useState(false);
@@ -243,6 +244,20 @@ export default function CrearDocumentoPage() {
               selected={tipo === "prophet"}
               onClick={() => setTipo("prophet")}
             />
+            {/* Tipos creados en el Template Studio — llegan del registro, no
+                están hardcodeados: publicar una plantilla la vuelve usable aquí. */}
+            {templates.data
+              ?.filter((t) => t.tipo !== "model_development" && t.tipo !== "prophet")
+              .map((t) => (
+                <TipoCard
+                  key={t.tipo}
+                  icon={Layers}
+                  titulo={t.nombre}
+                  descripcion={`${t.n_secciones} secciones — plantilla creada en el Template Studio.`}
+                  selected={tipo === t.tipo}
+                  onClick={() => setTipo(t.tipo)}
+                />
+              ))}
           </div>
         </div>
 

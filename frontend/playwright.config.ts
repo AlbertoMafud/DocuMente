@@ -9,10 +9,32 @@
  *   npm run test:e2e            # headless
  *   npm run test:e2e -- --ui    # modo interactivo
  */
-import { defineConfig, devices } from "@playwright/test";
+import fs from "fs";
 import path from "path";
 
+import { defineConfig, devices } from "@playwright/test";
+
 const PROJECT_ROOT = path.resolve(__dirname, "..");
+
+// Base de datos nueva por corrida. Sin esto el estado se acumula entre
+// corridas (cada pasada del Template Studio publica una plantilla más) y la
+// suite se vuelve intermitente. Se genera aquí, al evaluar la config, porque
+// Playwright arranca los servidores ANTES del globalSetup: borrar el archivo
+// después sería quitárselo a un proceso que ya lo tiene abierto.
+const DATA_DIR = path.join(PROJECT_ROOT, "data");
+const RUN_DB = path.join(DATA_DIR, `e2e-${Date.now().toString(36)}.db`);
+
+fs.mkdirSync(DATA_DIR, { recursive: true });
+// Limpia las de corridas anteriores; a estas alturas ya nadie las tiene abierta.
+for (const archivo of fs.readdirSync(DATA_DIR)) {
+  if (/^e2e[-.].*\.db(-wal|-shm)?$/.test(archivo)) {
+    try {
+      fs.rmSync(path.join(DATA_DIR, archivo), { force: true });
+    } catch {
+      // Si alguna sigue bloqueada, no importa: esta corrida usa una nueva.
+    }
+  }
+}
 // Puertos aislados para E2E para no colisionar con dev local del usuario
 // (que típicamente usa 8001 + 3000-3002). Si están ocupados, Playwright
 // fallará explícitamente en lugar de saltar a otro puerto silenciosamente.
@@ -27,6 +49,11 @@ export default defineConfig({
   workers: 1,
   reporter: process.env.CI ? "github" : "list",
   timeout: 60_000,
+
+  // El frontend corre en modo desarrollo: Next.js compila cada ruta la
+  // primera vez que se visita, y ese arranque en frío puede pasar de los 5s
+  // por defecto. Subirlo evita fallas intermitentes que no son del producto.
+  expect: { timeout: 15_000 },
 
   use: {
     baseURL: `http://localhost:${WEB_PORT}`,
@@ -59,8 +86,9 @@ export default defineConfig({
         // cualquier máquina. Mismo principio que la fixture sin_llm de
         // tests/integration/test_api_smoke.py.
         ANTHROPIC_API_KEY: "",
-        // BD dedicada del E2E — antes escribía en data/documente.db del dev.
-        DATABASE_URL: `sqlite:///${PROJECT_ROOT.replace(/\\/g, "/")}/data/e2e.db`,
+        // BD dedicada y nueva por corrida (ver arriba). Antes de S18 el E2E
+        // escribía en data/documente.db, la base de desarrollo.
+        DATABASE_URL: `sqlite:///${RUN_DB.replace(/\\/g, "/")}`,
       },
     },
     {

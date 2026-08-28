@@ -16,7 +16,13 @@
  *   4. `npm run typecheck` valida que nada se rompió
  */
 
-export type TipoDocumento = "model_development" | "prophet";
+/**
+ * Tipos congelados en código + los publicados en el Template Studio, que
+ * llegan en runtime. El `(string & {})` conserva el autocompletado de los
+ * dos conocidos sin cerrar la unión — espejo del cambio en el backend, donde
+ * `Documento.tipo` pasó de Literal a str validado contra el registro.
+ */
+export type TipoDocumento = "model_development" | "prophet" | (string & {});
 export type EstadoDocumento =
   | "draft"
   | "in_review"
@@ -238,3 +244,79 @@ export interface Apendice {
 }
 
 export type RolSignoff = "reviewer" | "fae";
+
+// ===== Template Studio =====
+
+export type TipoContenido = "texto" | "tabla" | "campos";
+export type EstadoTemplate = "borrador" | "propuesto" | "publicado" | "retirado";
+export type SeveridadLint = "error" | "advertencia";
+
+export interface SeccionCatalogoDinamica {
+  id: string;
+  numero: string;
+  nombre: string;
+  obligatoria: boolean;
+  intencion: string;
+  tipo_contenido: TipoContenido;
+  schema_tabla: string[];
+  aliases: string[];
+  preguntas_guia: string[];
+}
+
+export interface HallazgoLint {
+  codigo: string;
+  severidad: SeveridadLint;
+  seccion_id: string | null;
+  mensaje: string;
+}
+
+export interface ResultadoLint {
+  hallazgos: HallazgoLint[];
+  incluyo_dry_run: boolean;
+  ejecutado_en: string;
+}
+
+export interface TemplateDinamico {
+  id: string;
+  slug: string;
+  nombre: string;
+  descripcion: string;
+  area_duena: string;
+  version: number;
+  estado: EstadoTemplate;
+  secciones: SeccionCatalogoDinamica[];
+  creado_por: string;
+  archivo_origen: string | null;
+  resultado_lint: ResultadoLint | null;
+  audit_trail: EventoAuditoria[];
+  creado_en: string;
+  actualizado_en: string;
+}
+
+export interface TemplateListItem {
+  id: string;
+  slug: string;
+  nombre: string;
+  descripcion: string;
+  area_duena: string;
+  estado: EstadoTemplate;
+  version: number;
+  n_secciones: number;
+  lint_aprobado: boolean | null;
+  actualizado_en: string;
+}
+
+export interface SeccionCandidata {
+  titulo: string;
+  numero: string;
+  nivel: number;
+  n_caracteres: number;
+}
+
+export interface Extraccion {
+  secciones_detectadas: SeccionCandidata[];
+  n_tablas: number;
+  advertencias: string[];
+  propuesta: SeccionCatalogoDinamica[];
+  notas_llm: string[];
+}

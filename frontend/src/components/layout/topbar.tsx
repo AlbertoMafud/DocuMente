@@ -26,6 +26,7 @@ const TOP_LABELS: Record<string, string> = {
   prophet: "Ficha Prophet",
   configuracion: "Configuración",
   ayuda: "Ayuda",
+  studio: "Template Studio",
 };
 
 // Sub-rutas dentro de /documentos/[id]/.

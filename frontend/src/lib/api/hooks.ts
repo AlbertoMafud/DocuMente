@@ -20,6 +20,7 @@ import {
   documentosApi,
   entrevistaApi,
   seccionesApi,
+  studioApi,
   templatesApi,
   versionesApi,
 } from "./client";
@@ -28,7 +29,9 @@ import type {
   CrearDocumentoRequest,
   EditarMetadataRequest,
   EstadoDocumento,
+  EstadoTemplate,
   RolSignoff,
+  SeccionCatalogoDinamica,
   Visibilidad,
 } from "./types";
 
@@ -424,6 +427,127 @@ export function useBorrarApendice() {
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: qk.apendices(vars.docId) });
       qc.invalidateQueries({ queryKey: qk.documento(vars.docId) });
+    },
+  });
+}
+
+// ===== Template Studio =====
+
+export const qkStudio = {
+  templates: (estado?: EstadoTemplate) => ["studio", "templates", estado ?? "todos"] as const,
+  template: (id: string) => ["studio", "templates", id] as const,
+};
+
+export function useTemplatesDisponibles() {
+  return useQuery({
+    queryKey: qk.templates(),
+    queryFn: templatesApi.listar,
+    staleTime: 60_000,
+  });
+}
+
+export function useTemplatesStudio(estado?: EstadoTemplate) {
+  return useQuery({
+    queryKey: qkStudio.templates(estado),
+    queryFn: () => studioApi.listar(estado),
+  });
+}
+
+export function useTemplateStudio(id: string) {
+  return useQuery({
+    queryKey: qkStudio.template(id),
+    queryFn: () => studioApi.obtener(id),
+    enabled: !!id,
+  });
+}
+
+export function useExtraerTemplate() {
+  return useMutation({
+    mutationFn: ({
+      archivo,
+      nombre,
+      descripcion,
+    }: {
+      archivo: File;
+      nombre: string;
+      descripcion: string;
+    }) => studioApi.extraer(archivo, nombre, descripcion),
+  });
+}
+
+export function useCrearTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: studioApi.crear,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["studio", "templates"] });
+    },
+  });
+}
+
+export function useActualizarSeccionesTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      secciones,
+    }: {
+      id: string;
+      secciones: SeccionCatalogoDinamica[];
+    }) => studioApi.actualizarSecciones(id, secciones),
+    onSuccess: (t) => {
+      qc.invalidateQueries({ queryKey: qkStudio.template(t.id) });
+    },
+  });
+}
+
+export function useLintTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => studioApi.lint(id),
+    onSuccess: (_r, id) => {
+      qc.invalidateQueries({ queryKey: qkStudio.template(id) });
+    },
+  });
+}
+
+export function useTransicionarTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      accion,
+      aceptarAdvertencias,
+    }: {
+      id: string;
+      accion: "publicar" | "retirar";
+      aceptarAdvertencias?: boolean;
+    }) => studioApi.transicionar(id, accion, aceptarAdvertencias ?? false),
+    onSuccess: (t) => {
+      qc.invalidateQueries({ queryKey: ["studio", "templates"] });
+      qc.invalidateQueries({ queryKey: qkStudio.template(t.id) });
+      // El catálogo de tipos disponibles cambia al publicar/retirar.
+      qc.invalidateQueries({ queryKey: qk.templates() });
+    },
+  });
+}
+
+export function useNuevaVersionTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => studioApi.nuevaVersion(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["studio", "templates"] });
+    },
+  });
+}
+
+export function useBorrarTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => studioApi.borrar(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["studio", "templates"] });
     },
   });
 }

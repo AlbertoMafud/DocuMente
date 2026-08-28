@@ -12,6 +12,7 @@ import { usePathname } from "next/navigation";
 import {
   Home,
   FileText,
+  Layers,
   Upload,
   Sparkles,
   Settings,
@@ -40,6 +41,7 @@ export const NAV_PRIMARY: NavItem[] = [
   { label: "Importar", href: "/importar", icon: Upload },
   { label: "Crear nuevo", href: "/documentos/crear", icon: FileText },
   { label: "Ficha Prophet", href: "/prophet", icon: Sparkles, badge: "Beta" },
+  { label: "Template Studio", href: "/studio", icon: Layers, badge: "Nuevo" },
 ];
 
 export const NAV_SECONDARY: NavItem[] = [
