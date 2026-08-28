@@ -2,7 +2,7 @@
 
 > Estado vivo del proyecto. Se lee al iniciar sesión y se actualiza al cerrar si hubo cambios significativos.
 
-**Última actualización:** 2026-08-28 (sesión 19 — Template Studio backend (S-A→S-D) + 12 P1 de la auditoría visual + `AI_HANDOFF.md` para la instancia corporativa. **4 commits en `claude/s19-avance`.** Tests: 584 Python + 7 E2E.)
+**Última actualización:** 2026-08-28 (sesión 19 — Template Studio **backend + UI** (S-A→S-D), 12 P1 de la auditoría visual, `AI_HANDOFF.md` y estabilización del E2E. **5 commits en `claude/s19-avance`.** Tests: 584 Python + 8 E2E.)
 
 ---
 
@@ -1400,3 +1400,63 @@ mudarlo y dejar las sesiones aquí para diseño/specs/revisión.
    actualizar `src/llm/pricing.py` (hoy solo conoce modelos 4.x → reportaría costo $0).
 5. P2 de la auditoría visual (9 ítems) + limpieza de los 42 avisos de mypy.
 6. Endpoint SSE para importar (hoy solo `/crear-con-fuentes` tiene stream).
+
+
+---
+
+## Adición a la sesión 19 — S-C: UI del Template Studio (commit `99ed83c`)
+
+Tras cerrar el backend, Alberto pidió seguir aquí antes de migrar y eligió S-C.
+
+### Qué se construyó
+
+- **`/studio`** — wizard de 5 pasos: subir `.docx` → estructura detectada → propuesta de la
+  IA → curación sección por sección → validar y publicar. **Sin LLM el flujo no se rompe**:
+  muestra la estructura detectada, avisa, y deja construir el catálogo a mano.
+- **`SeccionEditor`** — cada campo lleva la ayuda de su regla de `TEMPLATE_AIREADY_RULES.md`.
+  El identificador se muestra como permanente, explicando por qué no se edita.
+- **Paso 5** separa errores de advertencias: los errores deshabilitan el botón de publicar;
+  las advertencias exigen aceptación explícita, que queda en el historial de la plantilla.
+- **`/documentos/crear` ya no tiene los tipos hardcodeados** — los publicados en el Studio
+  llegan del registro. Sin esto, publicar una plantilla no servía de nada.
+- `TipoDocumento` del frontend abierto a `string`, espejo del backend.
+- Entrada "Template Studio" en el sidebar (badge Nuevo) y en el breadcrumb.
+
+### E2E nuevo + estabilización de la suite
+
+`e2e/studio.spec.ts` con fixture `.docx` propio: recorre el wizard completo y verifica que
+la validación **bloquea** con errores, que tras corregir publica, y que el tipo nuevo aparece
+al crear un documento.
+
+Durante el trabajo se descubrieron **dos bugs del arnés de pruebas** (no del producto):
+
+1. **Estado acumulado entre corridas** — el E2E reusaba `data/e2e.db`, así que cada pasada
+   del Studio publicaba una plantilla más y la suite se volvía intermitente. Ahora se genera
+   una BD nueva por corrida **al evaluar la config**; no se puede borrar en `globalSetup`
+   porque Playwright arranca los servidores antes que él.
+2. **Timeout de aserciones muy corto** — el frontend corre en modo desarrollo y Next.js
+   compila cada ruta en su primera visita, lo que a veces pasaba de los 5s por defecto.
+   Subido a 15s.
+
+**Resultado: 8/8 E2E en tres corridas seguidas** (antes: intermitente).
+
+### Estado del Template Studio tras S-C
+
+| Sesión | Estado |
+|---|---|
+| S-A modelos, tabla, repositorio, registro | ✅ |
+| S-B extracción DOCX + propuesta LLM | ✅ |
+| S-C **UI del wizard** | ✅ |
+| S-D lint determinístico + publicar + integración | ✅ |
+| **S-E plantilla Word genérica + writer** | ⏸️ **Requiere diseño manual en Word de Alberto** |
+| S-D.2 capa 2 del lint (dry-run con LLM) | ⏸️ |
+| S-F / S-G fase 2 (usuarios proponen, admin aprueba) | ⏸️ |
+
+**El 501 al exportar tipos dinámicos sigue vivo** y es ahora el único hueco funcional del
+módulo: se puede crear una plantilla, publicarla y documentar con ella, pero no exportar a
+Word. Cerrarlo es S-E.
+
+### Calidad al cierre
+
+584 pytest · 8/8 Playwright (×3 corridas) · ruff limpio · mypy 42 (baseline) · tsc y ESLint
+limpios · build 20 rutas.
