@@ -23,6 +23,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { ErrorState } from "@/components/ui/error-state";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -163,6 +164,15 @@ export default function VersionesPage() {
             <Skeleton key={i} className="h-20 w-full" />
           ))}
         </div>
+      ) : versionesQuery.error ? (
+        <ErrorState
+          titulo="No se pudieron cargar las versiones"
+          detalle={(versionesQuery.error as Error).message}
+          onRetry={() => void versionesQuery.refetch()}
+          retrying={versionesQuery.isRefetching}
+          volverHref={`/documentos/${id}`}
+          volverLabel="Volver al dashboard"
+        />
       ) : versionesQuery.data && versionesQuery.data.length > 0 ? (
         <div className="space-y-2">
           {[...versionesQuery.data].reverse().map((v) => (
@@ -254,6 +264,10 @@ export default function VersionesPage() {
             Las versiones se crean automáticamente al exportar con la opción
             &quot;Crear nueva versión&quot;, o manualmente desde aquí.
           </p>
+          <Button className="mt-5" onClick={() => setCreando(true)}>
+            <Plus className="mr-1 h-4 w-4" />
+            Crear versión
+          </Button>
         </div>
       )}
     </div>

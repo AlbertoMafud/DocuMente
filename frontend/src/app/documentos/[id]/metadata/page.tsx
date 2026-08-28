@@ -15,21 +15,31 @@ import { toast } from "sonner";
 import type { MetadataModelo, TierRiesgo } from "@/lib/api/types";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { ErrorState } from "@/components/ui/error-state";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useDocumento, useEditarMetadata } from "@/lib/api/hooks";
 
-const TIER_OPTIONS: { value: TierRiesgo | ""; label: string }[] = [
-  { value: "", label: "— Sin definir —" },
-  { value: "low", label: "Low" },
-  { value: "medium_minus", label: "Medium-" },
-  { value: "medium", label: "Medium" },
-  { value: "high", label: "High" },
-  { value: "very_high", label: "Very High" },
-  { value: "very_high_plus", label: "Very High+" },
-  { value: "critical", label: "Critical" },
+const SIN_TIER = "sin_definir";
+
+const TIER_OPTIONS: { value: TierRiesgo | typeof SIN_TIER; label: string }[] = [
+  { value: SIN_TIER, label: "Sin definir" },
+  { value: "low", label: "Bajo" },
+  { value: "medium_minus", label: "Medio-" },
+  { value: "medium", label: "Medio" },
+  { value: "high", label: "Alto" },
+  { value: "very_high", label: "Muy alto" },
+  { value: "very_high_plus", label: "Muy alto+" },
+  { value: "critical", label: "Crítico" },
 ];
 
 type FormState = Partial<MetadataModelo>;
@@ -54,9 +64,16 @@ export default function EditarMetadataPage() {
     return <Skeleton className="h-96 w-full" />;
   }
 
-  if (!docQuery.data) {
+  if (docQuery.error || !docQuery.data) {
     return (
-      <p className="text-sm text-smnyl-danger">No se pudo cargar el documento.</p>
+      <ErrorState
+        titulo="No se pudo cargar el documento"
+        detalle={(docQuery.error as Error | null)?.message}
+        onRetry={() => void docQuery.refetch()}
+        retrying={docQuery.isRefetching}
+        volverHref={`/documentos/${id}`}
+        volverLabel="Volver al dashboard"
+      />
     );
   }
 
@@ -183,28 +200,27 @@ export default function EditarMetadataPage() {
             placeholder="YYYY-MM-DD"
           />
           <div className="space-y-2">
-            <Label>Inherent risk tier</Label>
-            <select
-              className="
-                flex h-10 w-full rounded-md border border-smnyl-border-input bg-white px-3 text-sm
-                transition-all duration-200 ease-out
-                focus-visible:outline-none focus-visible:border-smnyl-primary
-                focus-visible:ring-2 focus-visible:ring-smnyl-primary/15
-              "
-              value={form.inherent_risk_tier ?? ""}
-              onChange={(e) =>
+            <Label>Nivel de riesgo inherente</Label>
+            <Select
+              value={form.inherent_risk_tier ?? SIN_TIER}
+              onValueChange={(value) =>
                 setField(
                   "inherent_risk_tier",
-                  (e.target.value === "" ? null : e.target.value) as TierRiesgo | null,
+                  (value === SIN_TIER ? null : value) as TierRiesgo | null,
                 )
               }
             >
+              <SelectTrigger aria-label="Nivel de riesgo inherente">
+                <SelectValue placeholder="Selecciona el nivel de riesgo" />
+              </SelectTrigger>
+              <SelectContent>
               {TIER_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
+                <SelectItem key={opt.value} value={opt.value}>
                   {opt.label}
-                </option>
+                </SelectItem>
               ))}
-            </select>
+              </SelectContent>
+            </Select>
           </div>
           <Field
             label="Nomenclatura"

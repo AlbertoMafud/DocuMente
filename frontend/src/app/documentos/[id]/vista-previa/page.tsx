@@ -15,6 +15,7 @@ import type { Seccion } from "@/lib/api/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { ErrorState } from "@/components/ui/error-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDocumento } from "@/lib/api/hooks";
 import { exportarApi } from "@/lib/api/client";
@@ -50,9 +51,16 @@ export default function VistaPreviaPage() {
     return <Skeleton className="h-96 w-full" />;
   }
 
-  if (!docQuery.data) {
+  if (docQuery.error || !docQuery.data) {
     return (
-      <p className="text-sm text-smnyl-danger">No se pudo cargar el documento.</p>
+      <ErrorState
+        titulo="No se pudo cargar el documento"
+        detalle={(docQuery.error as Error | null)?.message}
+        onRetry={() => void docQuery.refetch()}
+        retrying={docQuery.isRefetching}
+        volverHref={`/documentos/${id}`}
+        volverLabel="Volver al dashboard"
+      />
     );
   }
 
@@ -178,13 +186,7 @@ function SeccionPreview({ seccion, documentoId }: SeccionPreviewProps) {
           )}
         </p>
       ) : (
-        <div
-          className="rounded-md border-l-4 px-4 py-3"
-          style={{
-            backgroundColor: "#fdf4ee",
-            borderLeftColor: "#544235",
-          }}
-        >
+        <div className="rounded-md border-l-4 border-l-smnyl-warning-dark bg-smnyl-warning-soft px-4 py-3">
           <p className="text-sm text-smnyl-text-muted italic">
             Sección {seccion.obligatoria ? "obligatoria" : "opcional"} pendiente. Click{" "}
             <strong>Editar</strong> para llenarla manualmente o usa la entrevista desde el dashboard.

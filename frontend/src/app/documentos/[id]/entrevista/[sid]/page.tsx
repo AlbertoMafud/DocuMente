@@ -22,9 +22,21 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import type { MensajeEntrevista } from "@/lib/api/types";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { ErrorState } from "@/components/ui/error-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -65,16 +77,39 @@ export default function EntrevistaPage() {
     return <Skeleton className="h-96 w-full" />;
   }
 
-  if (!docQuery.data || !seccionQuery.data) {
+  if (docQuery.error || seccionQuery.error || !docQuery.data || !seccionQuery.data) {
     return (
-      <p className="text-sm text-smnyl-danger">No se pudo cargar la sección.</p>
+      <ErrorState
+        titulo="No se pudo cargar la sección"
+        detalle={((docQuery.error || seccionQuery.error) as Error | null)?.message}
+        onRetry={() => {
+          void docQuery.refetch();
+          void seccionQuery.refetch();
+        }}
+        retrying={docQuery.isRefetching || seccionQuery.isRefetching}
+        volverHref={`/documentos/${id}`}
+        volverLabel="Volver al dashboard"
+      />
+    );
+  }
+
+  if (estadoQuery.error) {
+    return (
+      <ErrorState
+        titulo="No se pudo cargar la entrevista"
+        detalle={(estadoQuery.error as Error).message}
+        onRetry={() => void estadoQuery.refetch()}
+        retrying={estadoQuery.isRefetching}
+        volverHref={`/documentos/${id}`}
+        volverLabel="Volver al dashboard"
+      />
     );
   }
 
   const seccion = seccionQuery.data;
   const mensajes: MensajeEntrevista[] = estadoQuery.data?.mensajes ?? [];
   const seccionCerrada = estadoQuery.data?.turno?.seccion_cerrada ?? false;
-  const noHayEntrevista = estadoQuery.isError || (!estadoQuery.data && !estadoQuery.isLoading);
+  const noHayEntrevista = !estadoQuery.data && !estadoQuery.isLoading;
 
   function handleSend() {
     if (!input.trim() || responder.isPending) return;
@@ -109,10 +144,7 @@ export default function EntrevistaPage() {
     );
   }
 
-  function handleDescartar() {
-    if (!confirm("¿Descartar la entrevista en curso? Perderás el progreso de esta sesión.")) {
-      return;
-    }
+  function handleDescartarConfirmado() {
     descartar.mutate({ docId: id, sid: sidDecoded });
   }
 
@@ -144,10 +176,30 @@ export default function EntrevistaPage() {
             )}
           </div>
           {!noHayEntrevista && (
-            <Button variant="outline" size="sm" onClick={handleDescartar}>
-              <RotateCcw className="mr-1 h-3.5 w-3.5" />
-              Reiniciar
-            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline" size="sm" disabled={descartar.isPending}>
+                  <RotateCcw className="mr-1 h-3.5 w-3.5" />
+                  Reiniciar
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Reiniciar entrevista</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    La conversación guardada para esta sección se descartará. Las
+                    respuestas y mensajes actuales dejarán de estar disponibles, y
+                    tendrás que iniciar una nueva entrevista.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleDescartarConfirmado}>
+                    Sí, reiniciar
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           )}
         </div>
       </div>

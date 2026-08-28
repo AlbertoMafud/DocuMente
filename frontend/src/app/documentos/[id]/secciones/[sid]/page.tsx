@@ -14,6 +14,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { ErrorState } from "@/components/ui/error-state";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
@@ -47,13 +48,19 @@ export default function EditarSeccionPage() {
     );
   }
 
-  if (!docQuery.data || !seccionQuery.data) {
+  if (docQuery.error || seccionQuery.error || !docQuery.data || !seccionQuery.data) {
     return (
-      <div className="rounded-lg border border-smnyl-danger/40 bg-smnyl-danger-soft p-6 max-w-xl">
-        <p className="text-sm text-smnyl-danger font-medium">
-          No se encontró el documento o la sección.
-        </p>
-      </div>
+      <ErrorState
+        titulo="No se encontró el documento o la sección"
+        detalle={((docQuery.error || seccionQuery.error) as Error | null)?.message}
+        onRetry={() => {
+          void docQuery.refetch();
+          void seccionQuery.refetch();
+        }}
+        retrying={docQuery.isRefetching || seccionQuery.isRefetching}
+        volverHref={`/documentos/${id}`}
+        volverLabel="Volver al dashboard"
+      />
     );
   }
 

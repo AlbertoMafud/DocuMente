@@ -12,7 +12,10 @@ const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
           "flex min-h-[80px] w-full rounded-md border border-smnyl-border-input bg-white",
           "px-3 py-2 text-sm ring-offset-background",
           "placeholder:text-smnyl-text-muted/60",
-          "transition-all duration-200 ease-out font-mono",
+          // font-body por default: los campos de prosa (onboarding, metadata,
+          // brief) heredan la voz tipográfica de marca. Los editores de
+          // markdown/LaTeX optan por mono pasando `font-mono` en className.
+          "transition-all duration-200 ease-out font-body",
           "focus-visible:outline-none focus-visible:border-smnyl-primary " +
             "focus-visible:ring-2 focus-visible:ring-smnyl-primary/15",
           "disabled:cursor-not-allowed disabled:opacity-50",

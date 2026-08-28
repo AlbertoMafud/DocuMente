@@ -13,6 +13,7 @@ import {
 } from "@tanstack/react-query";
 
 import {
+  APIError,
   apendicesApi,
   auditoriaApi,
   brechasApi,
@@ -241,9 +242,18 @@ export function useRegistrarSignoff() {
 export function useEstadoEntrevista(docId: string, sid: string) {
   return useQuery({
     queryKey: qk.entrevistaEstado(docId, sid),
-    queryFn: () => entrevistaApi.estado(docId, sid),
+    queryFn: async () => {
+      try {
+        return await entrevistaApi.estado(docId, sid);
+      } catch (err) {
+        if (err instanceof APIError && err.status === 404) {
+          return null;
+        }
+        throw err;
+      }
+    },
     enabled: !!docId && !!sid,
-    retry: false,  // 404 si no hay entrevista activa — no reintentar
+    retry: false,
   });
 }
 

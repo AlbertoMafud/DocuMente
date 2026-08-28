@@ -11,6 +11,7 @@ import Link from "next/link";
 import {
   ArrowLeft,
   ArrowRight,
+  FilePlus2,
   Loader2,
   Sparkles,
   UploadCloud,
@@ -169,10 +170,16 @@ export default function ProphetPage() {
             <Label className="mb-2 block">Elige el modelo a documentar</Label>
             <div className="space-y-2">
               {modelos.length === 0 && (
-                <p className="text-sm text-smnyl-text-muted italic">
-                  No se detectaron modelos en el Excel. Verifica que la hoja
-                  &quot;Descripcion_General&quot; existe.
-                </p>
+                <div className="rounded-lg border border-dashed border-smnyl-border bg-smnyl-bg-soft/40 px-6 py-8 text-center">
+                  <p className="text-sm text-smnyl-text-muted">
+                    No se detectaron modelos en el Excel. Verifica que la hoja
+                    &quot;Descripcion_General&quot; existe.
+                  </p>
+                  <Button className="mt-4" variant="outline" onClick={() => setStep("subir")}>
+                    <FilePlus2 className="mr-1 h-4 w-4" />
+                    Subir otro archivo
+                  </Button>
+                </div>
               )}
               {modelos.map((m) => (
                 <button

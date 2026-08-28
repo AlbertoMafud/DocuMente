@@ -71,7 +71,13 @@
   /* Status pill — usado para badges de estado MRM (DRAFT, IN_REVIEW, …) */
   .smnyl-pill {
     @apply inline-flex items-center rounded-full px-2.5 py-0.5
-           text-[0.68rem] font-bold uppercase tracking-wider;
+           text-2xs font-bold uppercase tracking-wider;
+  }
+  /* Eyebrow — etiqueta micro uppercase sobre títulos/métricas. Token del
+     patrón identificado en S13 y formalizado en S19 (P1-16): un solo lugar
+     define tamaño, peso y tracking del rótulo. Color lo pone el consumidor. */
+  .eyebrow {
+    @apply text-2xs font-bold uppercase tracking-eyebrow;
   }
   /* Card hover lift — replica el patrón premium T1 del dashboard */
   .smnyl-card-hover {

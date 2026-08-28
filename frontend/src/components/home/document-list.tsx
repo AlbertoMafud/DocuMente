@@ -6,8 +6,10 @@
  */
 "use client";
 
-import { FileText, Archive, Trash2 } from "lucide-react";
+import Link from "next/link";
+import { FileText, Archive, Trash2, Plus } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDocumentos } from "@/lib/api/hooks";
@@ -138,6 +140,14 @@ function EmptyPane({ visibilidad }: { visibilidad: Visibilidad }) {
       <p className="max-w-md text-sm text-smnyl-text-muted leading-relaxed">
         {contenido.descripcion}
       </p>
+      {visibilidad === "activos" && (
+        <Button className="mt-5" asChild>
+          <Link href="/documentos/crear">
+            <Plus className="mr-1 h-4 w-4" />
+            Crear documento
+          </Link>
+        </Button>
+      )}
     </div>
   );
 }

@@ -25,8 +25,16 @@ import type { Apendice, Seccion } from "@/lib/api/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { ErrorState } from "@/components/ui/error-state";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
@@ -49,8 +57,17 @@ export default function ApendicesPage() {
   if (docQuery.isLoading) {
     return <Skeleton className="h-96 w-full" />;
   }
-  if (!docQuery.data) {
-    return <p className="text-sm text-smnyl-danger">No se pudo cargar.</p>;
+  if (docQuery.error || !docQuery.data) {
+    return (
+      <ErrorState
+        titulo="No se pudo cargar el documento"
+        detalle={(docQuery.error as Error | null)?.message}
+        onRetry={() => void docQuery.refetch()}
+        retrying={docQuery.isRefetching}
+        volverHref={`/documentos/${id}`}
+        volverLabel="Volver al dashboard"
+      />
+    );
   }
 
   return (
@@ -84,6 +101,15 @@ export default function ApendicesPage() {
         </h2>
         {apendicesQuery.isLoading ? (
           <Skeleton className="h-32 w-full" />
+        ) : apendicesQuery.error ? (
+          <ErrorState
+            titulo="No se pudieron cargar los apéndices"
+            detalle={(apendicesQuery.error as Error).message}
+            onRetry={() => void apendicesQuery.refetch()}
+            retrying={apendicesQuery.isRefetching}
+            volverHref={`/documentos/${id}`}
+            volverLabel="Volver al dashboard"
+          />
         ) : apendicesQuery.data && apendicesQuery.data.length > 0 ? (
           <div className="space-y-2">
             {apendicesQuery.data.map((ap) => (
@@ -301,22 +327,22 @@ function SeccionPicker({
   return (
     <div className="space-y-2">
       <Label>Sección destino</Label>
-      <select
+      <Select
         value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="
-          flex h-10 w-full rounded-md border border-smnyl-border-input bg-white px-3 text-sm
-          transition-all duration-200 ease-out
-          focus-visible:outline-none focus-visible:border-smnyl-primary
-          focus-visible:ring-2 focus-visible:ring-smnyl-primary/15
-        "
+        onValueChange={onChange}
+        disabled={secciones.length === 0}
       >
-        {secciones.map((s) => (
-          <option key={s.id} value={s.id}>
-            {s.numero} {s.nombre}
-          </option>
-        ))}
-      </select>
+        <SelectTrigger aria-label="Sección destino">
+          <SelectValue placeholder="Selecciona una sección" />
+        </SelectTrigger>
+        <SelectContent>
+          {secciones.map((s) => (
+            <SelectItem key={s.id} value={s.id}>
+              {s.numero} {s.nombre}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </div>
   );
 }

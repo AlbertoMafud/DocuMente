@@ -8,6 +8,7 @@ import Link from "next/link";
 import { ArrowLeft, ClipboardList } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { ErrorState } from "@/components/ui/error-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuditoria, useDocumento } from "@/lib/api/hooks";
 import { Timeline } from "@/components/auditoria/timeline";
@@ -48,6 +49,15 @@ export default function AuditoriaPage() {
             <Skeleton key={i} className="h-16 w-full" />
           ))}
         </div>
+      ) : auditQuery.error ? (
+        <ErrorState
+          titulo="No se pudo cargar la auditoría"
+          detalle={(auditQuery.error as Error).message}
+          onRetry={() => void auditQuery.refetch()}
+          retrying={auditQuery.isRefetching}
+          volverHref={`/documentos/${id}`}
+          volverLabel="Volver al dashboard"
+        />
       ) : (
         <Timeline eventos={auditQuery.data ?? []} />
       )}

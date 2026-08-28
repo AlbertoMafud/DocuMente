@@ -6,7 +6,7 @@
  */
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, FileText, FilePlus2, Loader2, X, UploadCloud } from "lucide-react";
@@ -20,6 +20,13 @@ type FileType = "docx" | "pdf";
 
 const ANCLA_ACCEPT = ".docx,.pdf";
 const FUENTES_ACCEPT = ".pdf,.xlsx,.xls,.csv,.txt,.docx";
+const IMPORT_STAGES = [
+  "Subiendo documento ancla",
+  "Extrayendo estructura y texto",
+  "Analizando fuentes adicionales",
+  "Completando secciones disponibles",
+  "Guardando el documento importado",
+];
 
 export default function ImportarPage() {
   const router = useRouter();
@@ -27,9 +34,21 @@ export default function ImportarPage() {
   const [fuentes, setFuentes] = useState<File[]>([]);
   const [describirImagenes, setDescribirImagenes] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [stageIndex, setStageIndex] = useState(0);
   const [dragOver, setDragOver] = useState<"ancla" | "fuentes" | null>(null);
   const anclaInputRef = useRef<HTMLInputElement>(null);
   const fuentesInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!submitting) {
+      setStageIndex(0);
+      return;
+    }
+    const intervalId = window.setInterval(() => {
+      setStageIndex((current) => Math.min(current + 1, IMPORT_STAGES.length - 1));
+    }, 8000);
+    return () => window.clearInterval(intervalId);
+  }, [submitting]);
 
   const handleAnclaDrop = useCallback((files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -54,10 +73,8 @@ export default function ImportarPage() {
       return;
     }
     setSubmitting(true);
-    const toastId = toast.loading(
-      "Procesando documento con IA — esto puede tardar varios minutos " +
-        "(típicamente ~10 min). Puedes dejar la ventana abierta.",
-    );
+    setStageIndex(0);
+    const toastId = toast.loading("Importación en curso. Mantén esta ventana abierta.");
     try {
       const doc = await importarApi.docx(ancla, fuentes, "default", describirImagenes);
       toast.success(`"${doc.metadata_modelo.nombre_modelo || ancla.name}" importado.`, {
@@ -90,6 +107,24 @@ export default function ImportarPage() {
           oficial de NYL e identificará brechas para que las completes con apoyo de Claude.
         </p>
       </div>
+
+      {submitting && (
+        <Card className="border-smnyl-primary/30 bg-smnyl-bg-soft/40 p-5 animate-fade-in">
+          <div className="flex items-start gap-3">
+            <Loader2 className="mt-0.5 h-5 w-5 shrink-0 animate-spin text-smnyl-primary" />
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-smnyl-text">
+                {IMPORT_STAGES[stageIndex]}
+              </p>
+              <p className="text-xs leading-relaxed text-smnyl-text-muted">
+                La importación sigue ejecutándose en una sola petición. Sin un
+                endpoint de progreso en backend no hay porcentaje real; con
+                fuentes adicionales o imágenes puede tardar cerca de 10 minutos.
+              </p>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {/* Ancla */}
       <section className="animate-fade-in">

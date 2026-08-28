@@ -88,6 +88,17 @@ const config: Config = {
         display: ['Georgia', '"Times New Roman"', "serif"],
         body: ['Tahoma', '"Segoe UI"', "-apple-system", "BlinkMacSystemFont", "sans-serif"],
       },
+      fontSize: {
+        // Escala micro-tipográfica: absorbe los text-[0.65rem]/[0.68rem]/
+        // [0.7rem] arbitrarios repetidos en 13 sitios (auditoría S19 P1-16).
+        "2xs": ["0.7rem", { lineHeight: "1rem" }],
+        "3xs": ["0.65rem", { lineHeight: "1rem" }],
+      },
+      letterSpacing: {
+        // Tracking del patrón "eyebrow" (uppercase + bold); absorbe los
+        // tracking-[0.07em]/[0.12em] arbitrarios.
+        eyebrow: "0.1em",
+      },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",

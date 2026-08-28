@@ -6,6 +6,9 @@
  *
  * SVG inline trazado a mano sobre un viewBox 32x32, stroke blanco sobre
  * fondo gradient SMNYL. Escalable a cualquier tamaño manteniendo nitidez.
+ *
+ * Pendiente de marca: confirmar si el shell debe usar este logo de producto
+ * o el logo de la institución. El asset institucional no se versiona aquí.
  */
 import { cn } from "@/lib/utils";
 

@@ -11,7 +11,7 @@
  */
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Brain, Loader2 } from "lucide-react";
@@ -19,6 +19,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { ErrorState } from "@/components/ui/error-state";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -40,10 +41,10 @@ export default function OnboardingPage() {
   const [target, setTarget] = useState("");
   const [intended, setIntended] = useState("");
   const [restrictions, setRestrictions] = useState("");
+  const [initialized, setInitialized] = useState(false);
 
-  // Hidrata desde el documento existente
-  useState(() => {
-    if (docQuery.data) {
+  useEffect(() => {
+    if (!initialized && docQuery.data) {
       const m = docQuery.data.metadata_modelo;
       setPlataforma(m.implementation_platform);
       setVersion(m.current_version);
@@ -51,8 +52,9 @@ export default function OnboardingPage() {
       setTarget(m.target_production_date);
       setIntended(m.intended_use);
       setRestrictions(m.use_restrictions);
+      setInitialized(true);
     }
-  });
+  }, [docQuery.data, initialized]);
 
   function handleSubmit() {
     editar.mutate(
@@ -79,6 +81,19 @@ export default function OnboardingPage() {
 
   if (docQuery.isLoading) {
     return <Skeleton className="h-96 w-full" />;
+  }
+
+  if (docQuery.error || !docQuery.data) {
+    return (
+      <ErrorState
+        titulo="No se pudo cargar el documento"
+        detalle={(docQuery.error as Error | null)?.message}
+        onRetry={() => void docQuery.refetch()}
+        retrying={docQuery.isRefetching}
+        volverHref={`/documentos/${id}`}
+        volverLabel="Volver al dashboard"
+      />
+    );
   }
 
   return (

@@ -28,9 +28,11 @@ export function ContinueHero({ doc }: ContinueHeroProps) {
         p-8 shadow-smnyl-sm animate-fade-in
       "
     >
-      <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_30%_20%,rgba(0,121,194,0.06),transparent_60%)]" />
+      {/* theme() en valor arbitrario: el radial lee el token primario del
+          config en lugar de un rgba hardcodeado (S19 P1-7). */}
+      <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_30%_20%,theme(colors.smnyl.primary/6%),transparent_60%)]" />
 
-      <p className="text-[0.7rem] font-bold uppercase tracking-[0.12em] text-smnyl-primary-dark">
+      <p className="eyebrow text-smnyl-primary-dark">
         Continúa donde te quedaste
       </p>
       <h1 className="font-display text-3xl font-semibold text-smnyl-text mt-2 mb-1">
